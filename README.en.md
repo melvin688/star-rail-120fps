@@ -47,6 +47,8 @@ Expect a steady frame rate close to 120; small dips in heavy scenes are normal.
 
 ## The FPS counter (FPS-MONITOR.bat)
 
+![FPS overlay preview](docs/screenshot-fps-overlay.png)
+
 - Powered by Intel's official open-source [PresentMon](https://github.com/GameTechDev/PresentMon) (MIT), reading system-level frame events (ETW) — **works on any GPU**, never injects into the game
 - Asks for administrator rights once: a Windows requirement for reading frame events; it only reads, never modifies anything
 - About 210×84 px, docked to the **top-right corner**; rounded dark panel at 80% opacity showing **FPS + 1% low + frame time (ms)**; draggable, right-click → Exit

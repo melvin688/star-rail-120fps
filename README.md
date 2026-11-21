@@ -47,6 +47,8 @@
 
 ## 帧率小窗（FPS-MONITOR.bat）说明
 
+![帧率小窗效果](docs/screenshot-fps-overlay.png)
+
 - 原理：调用 Intel 官方开源工具 [PresentMon](https://github.com/GameTechDev/PresentMon)（MIT）读取 Windows 图形栈的帧事件（系统级 ETW），**与显卡品牌无关**，不注入游戏进程
 - 会请求一次管理员权限：这是 Windows 读取帧事件的系统要求，仅用于读数，不修改任何东西
 - 尺寸约 210×84 像素，默认停在屏幕**右上角**；深色圆角面板（80% 不透明度），显示 **FPS + 1% Low + 帧时间(ms)**，可拖动；右键 → Exit 退出
