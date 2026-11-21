@@ -89,6 +89,8 @@ Takes effect **after you sign out and back in**; `FPS-MONITOR.bat` will no longe
 - Which clients are supported? → Global `HKCU\Software\Cognosphere\Star Rail`; China `HKCU\Software\miHoYo\崩坏：星穹铁道`. Both clients officially expose only 30/60.
 - My monitor isn't 120 Hz. → Still fine. The script warns you that gains are limited below 120 Hz (but it can still reduce stutter).
 - Will the window fit on a small screen? → It adapts. The window is capped to the desktop work area and the content switches to scrolling instead of being clipped (measured 480×602 client area on 1280×720).
+- After force-closing the overlay, a PresentMon process is still running. → Run `CLEANUP-PRESENTMON.bat` (asks for elevation only when something is actually left over). Closing the overlay normally (right-click → Exit) cleans up after itself; only killing it from Task Manager can leave a leftover.
+- Task Manager shows a `PresentMonSharedService`? → That is installed by Intel's official PresentMon installer, not by this tool (this tool ships only the portable exe). You can leave it; to stop it starting with Windows, run `sc config PresentMonSharedService start= demand` in an admin prompt.
 
 ## How it works
 
@@ -100,7 +102,7 @@ The game stores its graphics settings in the current user's registry, under a bi
 
 ## Safety & rollback
 
-- Edits only your own user registry setting — equivalent to changing an in-game option. No system files, no services, nothing running in the background
+- Edits only your own user registry setting — equivalent to changing an in-game option. No system files, no services, nothing running in the background (if a `PresentMonSharedService` already exists on your system, it came from Intel's official installer and is unrelated to this tool)
 - The original value is backed up automatically; "Restore 60 FPS" (or `RESTORE-60FPS.bat`) returns to the official default
 - Not affiliated with the game's developer or publisher. Use at your own risk.
 

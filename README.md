@@ -89,6 +89,8 @@ net localgroup "Performance Log Users" %USERNAME% /add
 - 支持哪些客户端？→ 国际服 `HKCU\Software\Cognosphere\Star Rail`；国服 `HKCU\Software\miHoYo\崩坏：星穹铁道`。两个客户端官方都只给 30/60 两档。
 - 显示器不是 120Hz 能用吗？→ 能。脚本会检测并提示：屏幕刷新率低于 120Hz 时，120 FPS 上限的收益有限（但仍可减少卡顿）。
 - 小屏幕上窗口放不下吗？→ 会自适应。窗口尺寸按桌面工作区收敛，放不下时内容改为滚动查看，不裁切（1280×720 实测客户区 480×602）。
+- 小窗被强制关掉后后台还留着 PresentMon 进程？→ 双击 `CLEANUP-PRESENTMON.bat` 清理（有残留时才请求管理员权限）。正常关窗（右键 → Exit）会自动清理，只有用任务管理器强杀才会留残留。
+- 任务管理器里有个 `PresentMonSharedService`？→ 那是 Intel PresentMon 官方安装程序装的服务，与本工具无关（本工具只用便携 exe）。不用可以留着，想让它不随开机启动：管理员 CMD 执行 `sc config PresentMonSharedService start= demand`。
 
 ## 工作原理
 
@@ -100,7 +102,7 @@ net localgroup "Performance Log Users" %USERNAME% /add
 
 ## 安全与回滚
 
-- 仅修改当前用户的注册表设置值，等效于游戏内改设置；不写系统目录、不装服务、不常驻
+- 仅修改当前用户的注册表设置值，等效于游戏内改设置；不写系统目录、不装服务、不常驻（若系统里已有 Intel 官方 `PresentMonSharedService`，那是官方安装程序装的，与本工具无关）
 - 原始值自动备份；随时点「恢复 60 FPS」或跑 `RESTORE-60FPS.bat` 恢复默认
 - 与本游戏开发 / 发行方无任何关联；使用风险自负
 
