@@ -94,7 +94,7 @@ $script:form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
 $script:form.Size = New-Object System.Drawing.Size(210, 84)
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $false
-$script:form.Opacity = 0.80
+$script:form.Opacity = 0.90
 $script:form.BackColor = [System.Drawing.Color]::FromArgb(10, 10, 10)
 $script:form.Text = 'FPS Monitor'
 
