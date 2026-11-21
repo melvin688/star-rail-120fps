@@ -65,6 +65,8 @@ Run `StarRail-120FPS.bat` and use the "FPS overlay" card at the bottom:
 - **Size** small 160×64 / medium 210×84 / large 260×104 — fonts and padding scale with it, nothing gets clipped
 - **Position** top-right / top-left / bottom-right
 
+![The three overlay sizes](docs/screenshot-overlay-sizes.png)
+
 Changes are written straight to `%LOCALAPPDATA%\star-rail-120fps\overlay.json`, and the next `FPS-MONITOR.bat` launch uses that style. Delete the file to go back to defaults.
 
 ### Making it permanently admin-free (optional)

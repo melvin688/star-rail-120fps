@@ -65,6 +65,8 @@
 - **尺寸** 小 160×64 / 中 210×84 / 大 260×104 —— 字号与内边距按比例缩放，内容不会被裁切
 - **位置** 右上 / 左上 / 右下
 
+![三档尺寸对比](docs/screenshot-overlay-sizes.png)
+
 改动即时写入 `%LOCALAPPDATA%\star-rail-120fps\overlay.json`，之后双击 `FPS-MONITOR.bat` 就按这套样式显示。删掉该文件即恢复默认值。
 
 ### 想让小窗永久免管理员授权（可选）
