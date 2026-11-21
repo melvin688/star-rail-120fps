@@ -88,6 +88,7 @@ Takes effect **after you sign out and back in**; `FPS-MONITOR.bat` will no longe
 - Is it bannable? → It does not inject, does not modify game files, and only edits a local display setting (same class as changing an in-game option). Use at your own risk and respect the game's terms.
 - Which clients are supported? → Global `HKCU\Software\Cognosphere\Star Rail`; China `HKCU\Software\miHoYo\崩坏：星穹铁道`. Both clients officially expose only 30/60.
 - My monitor isn't 120 Hz. → Still fine. The script warns you that gains are limited below 120 Hz (but it can still reduce stutter).
+- Will the window fit on a small screen? → It adapts. The window is capped to the desktop work area and the content switches to scrolling instead of being clipped (measured 480×602 client area on 1280×720).
 
 ## How it works
 

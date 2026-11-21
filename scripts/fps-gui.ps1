@@ -262,9 +262,13 @@ $form.Font = New-Object System.Drawing.Font($F, (FS 10))
 $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 $desW = S 460
 $desH = S 640
+# Keep the window inside the work area on BOTH axes; scroll instead of clipping.
+$maxW = $wa.Width - (S 60)
 $maxH = $wa.Height - (S 70)
-$script:scrollMode = $false
-if ($desH -gt $maxH) { $desH = $maxH; $script:scrollMode = $true }
+$script:scrollMode = ($desH -gt $maxH)
+if ($script:scrollMode) { $desW = [Math]::Min($desW + (S 20), $maxW) }   # width for the 17px scrollbar
+if ($desW -gt $maxW) { $desW = $maxW }
+if ($desH -gt $maxH) { $desH = $maxH }
 $form.ClientSize = New-Object System.Drawing.Size($desW, $desH)
 $form.AutoScroll = $script:scrollMode
 
