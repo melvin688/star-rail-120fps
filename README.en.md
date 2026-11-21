@@ -49,7 +49,7 @@ Expect a steady frame rate close to 120; small dips in heavy scenes are normal.
 
 - Powered by Intel's official open-source [PresentMon](https://github.com/GameTechDev/PresentMon) (MIT), reading system-level frame events (ETW) — **works on any GPU**, never injects into the game
 - Asks for administrator rights once: a Windows requirement for reading frame events; it only reads, never modifies anything
-- About 160×68 px (~0.5% of a 1080p screen), semi-transparent and always on top, draggable; right-click → Exit
+- About 210×84 px, docked to the **top-right corner**; rounded dark panel at 80% opacity showing **FPS + 1% low + frame time (ms)**; draggable, right-click → Exit
 - Color coding: green ≥60 / yellow 30–59 / red <30; the window closes itself when the target process exits
 - Best on a second monitor, or with the game running in borderless-windowed mode (Windows does not allow other windows over exclusive fullscreen)
 - Bundled PresentMon: v2.6.0 (x64), SHA-256 `b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af`
