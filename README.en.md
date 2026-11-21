@@ -51,12 +51,23 @@ Expect a steady frame rate close to 120; small dips in heavy scenes are normal.
 
 - Powered by Intel's official open-source [PresentMon](https://github.com/GameTechDev/PresentMon) (MIT), reading system-level frame events (ETW) — **works on any GPU**, never injects into the game
 - Asks for administrator rights once: a Windows requirement for reading frame events; it only reads, never modifies anything
-- About 210×84 px, docked to the **top-right corner**; rounded dark panel at 90% opacity showing **FPS + 1% low + frame time (ms)**; draggable, right-click → Exit
+- Rounded dark panel showing **FPS + 1% low + frame time (ms)**; draggable, right-click → Exit
+- Defaults to **210×84 px, 90% opacity, top-right corner**; opacity (50–100%), size (small 160×64 / medium 210×84 / large 260×104) and position (top-right / top-left / bottom-right) are all adjustable in the launcher — see the next section
 - Color coding: green ≥60 / yellow 30–59 / red <30; the window closes itself when the target process exits
 - Best on a second monitor, or with the game running in borderless-windowed mode (Windows does not allow other windows over exclusive fullscreen)
 - Bundled PresentMon: v2.6.0 (x64), SHA-256 `b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af`
 
-### Make it permanently UAC-free (optional)
+### Overlay style (set in the launcher)
+
+Run `StarRail-120FPS.bat` and use the "FPS overlay" card at the bottom:
+
+- **Opacity** slider 50–100%, default 90% (higher = crisper digits over bright scenes)
+- **Size** small 160×64 / medium 210×84 / large 260×104 — fonts and padding scale with it, nothing gets clipped
+- **Position** top-right / top-left / bottom-right
+
+Changes are written straight to `%LOCALAPPDATA%\star-rail-120fps\overlay.json`, and the next `FPS-MONITOR.bat` launch uses that style. Delete the file to go back to defaults.
+
+### Making it permanently admin-free (optional)
 
 PresentMon officially supports a non-elevated path: add your user to the `Performance Log Users` system group. Run once as administrator:
 

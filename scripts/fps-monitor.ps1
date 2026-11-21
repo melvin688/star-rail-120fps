@@ -4,8 +4,11 @@
     Reads system-level frame events through Intel PresentMon (ETW) - it never
     injects into the game, and it works on any GPU (NVIDIA / AMD / Intel).
 
-    Shows: current FPS, 1% low, frame time. Sits at the top-right corner of the
-    screen, drag to move, right-click -> Exit.
+    Shows: current FPS, 1% low, frame time. Drag to move, right-click -> Exit.
+
+    Opacity / size / corner come from %LOCALAPPDATA%\star-rail-120fps\overlay.json,
+    which the GUI (fps-gui.ps1) writes when you move the opacity slider or pick a
+    size. Missing file => 90% opacity, medium (210x84), top-right.
 
     Requires administrator rights (Windows restricts frame-event tracing);
     FPS-MONITOR.bat handles the elevation prompt for you.
@@ -30,6 +33,39 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne [System.Thr
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+
+# Per-monitor DPI awareness so the panel stays sharp on scaled displays.
+Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+public class DpiUtil {
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+}
+'@
+try { [void][DpiUtil]::SetProcessDPIAware() } catch { }
+
+# --- Overlay preferences (written by the GUI) ----------------------------
+$script:ovOpacity = 0.90
+$script:ovW       = 210
+$script:ovH       = 84
+$script:ovPos     = 'topright'
+$ovFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\overlay.json'
+if (Test-Path $ovFile) {
+    try {
+        $o = Get-Content $ovFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $o.opacity) {
+            $v = [double]$o.opacity
+            if ($v -ge 0.3 -and $v -le 1.0) { $script:ovOpacity = $v }
+        }
+        if ($o.size -eq 'small') { $script:ovW = 160; $script:ovH = 64 }
+        if ($o.size -eq 'large') { $script:ovW = 260; $script:ovH = 104 }
+        if (@('topright', 'topleft', 'bottomright') -contains $o.position) { $script:ovPos = [string]$o.position }
+    } catch { }
+}
+
+# Everything inside the panel scales with its width (base design is 210x84).
+$script:sc = $script:ovW / 210.0
+function V([double]$p)  { return [int][Math]::Round($p * $script:sc) }
+function VF([double]$p) { $v = $p * $script:sc; if ($v -lt 8) { $v = 8 }; return [single]$v }
 
 # --- Locate PresentMon ---------------------------------------------------
 $toolsDir = Join-Path $PSScriptRoot '..\tools'
@@ -87,36 +123,42 @@ function Add-FrameLine([string]$line) {
     }
 }
 
-# --- The overlay window (Alt+R style) ------------------------------------
+# --- The overlay window (Alt+R style, size/opacity from preferences) -----
 $script:form = New-Object System.Windows.Forms.Form
 $script:form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
 $script:form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-$script:form.Size = New-Object System.Drawing.Size(210, 84)
+$script:form.Size = New-Object System.Drawing.Size($script:ovW, $script:ovH)
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $false
-$script:form.Opacity = 0.90
+$script:form.Opacity = $script:ovOpacity
 $script:form.BackColor = [System.Drawing.Color]::FromArgb(10, 10, 10)
 $script:form.Text = 'FPS Monitor'
 
-# default position: top-right corner of the working area
+# position from preferences (falls back to top-right)
 $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$script:form.Location = New-Object System.Drawing.Point(($wa.Right - $script:form.Width - 20), ($wa.Top + 20))
+$margin = V 20
+switch ($script:ovPos) {
+    'topleft'     { $px = $wa.Left + $margin;                        $py = $wa.Top + $margin }
+    'bottomright' { $px = $wa.Right - $script:ovW - $margin;         $py = $wa.Bottom - $script:ovH - $margin }
+    default       { $px = $wa.Right - $script:ovW - $margin;         $py = $wa.Top + $margin }
+}
+$script:form.Location = New-Object System.Drawing.Point($px, $py)
 
 # rounded corners - looks like a modern overlay panel
-$rr = 8
+$rr = [Math]::Max(4, (V 8))
 $gp = New-Object System.Drawing.Drawing2D.GraphicsPath
 $gp.AddArc(0, 0, $rr, $rr, 180, 90)
-$gp.AddArc(($script:form.Width - $rr - 1), 0, $rr, $rr, 270, 90)
-$gp.AddArc(($script:form.Width - $rr - 1), ($script:form.Height - $rr - 1), $rr, $rr, 0, 90)
-$gp.AddArc(0, ($script:form.Height - $rr - 1), $rr, $rr, 90, 90)
+$gp.AddArc(($script:ovW - $rr - 1), 0, $rr, $rr, 270, 90)
+$gp.AddArc(($script:ovW - $rr - 1), ($script:ovH - $rr - 1), $rr, $rr, 0, 90)
+$gp.AddArc(0, ($script:ovH - $rr - 1), $rr, $rr, 90, 90)
 $gp.CloseFigure()
 $script:form.Region = New-Object System.Drawing.Region($gp)
 
-# big FPS number, unit, and the info line
+# big FPS number, unit, and the info line (all scaled together)
 $script:fpsVal = New-Object System.Windows.Forms.Label
 $script:fpsVal.AutoSize = $true
-$script:fpsVal.Location = New-Object System.Drawing.Point(14, 4)
-$script:fpsVal.Font = New-Object System.Drawing.Font('Segoe UI', 30, [System.Drawing.FontStyle]::Bold)
+$script:fpsVal.Location = New-Object System.Drawing.Point((V 14), (V 4))
+$script:fpsVal.Font = New-Object System.Drawing.Font('Segoe UI', (VF 30), [System.Drawing.FontStyle]::Bold)
 $script:fpsVal.ForeColor = [System.Drawing.Color]::FromArgb(110, 230, 140)
 $script:fpsVal.BackColor = [System.Drawing.Color]::Transparent
 $script:fpsVal.Text = '--'
@@ -125,8 +167,8 @@ $script:form.Controls.Add($script:fpsVal)
 
 $script:fpsUnit = New-Object System.Windows.Forms.Label
 $script:fpsUnit.AutoSize = $true
-$script:fpsUnit.Location = New-Object System.Drawing.Point(96, 30)
-$script:fpsUnit.Font = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Bold)
+$script:fpsUnit.Location = New-Object System.Drawing.Point((V 96), (V 30))
+$script:fpsUnit.Font = New-Object System.Drawing.Font('Segoe UI', (VF 10.5), [System.Drawing.FontStyle]::Bold)
 $script:fpsUnit.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
 $script:fpsUnit.BackColor = [System.Drawing.Color]::Transparent
 $script:fpsUnit.Text = 'FPS'
@@ -135,9 +177,9 @@ $script:form.Controls.Add($script:fpsUnit)
 
 $script:info = New-Object System.Windows.Forms.Label
 $script:info.AutoSize = $false
-$script:info.Location = New-Object System.Drawing.Point(14, 54)
-$script:info.Size = New-Object System.Drawing.Size(182, 20)
-$script:info.Font = New-Object System.Drawing.Font('Segoe UI', 9.5)
+$script:info.Location = New-Object System.Drawing.Point((V 14), (V 54))
+$script:info.Size = New-Object System.Drawing.Size((V 182), (V 20))
+$script:info.Font = New-Object System.Drawing.Font('Segoe UI', (VF 9.5))
 $script:info.ForeColor = [System.Drawing.Color]::FromArgb(160, 165, 170)
 $script:info.BackColor = [System.Drawing.Color]::Transparent
 $script:info.Text = 'waiting ...'
@@ -215,7 +257,7 @@ $script:timer.Add_Tick({
 
     if ($script:total -gt 0) {
         $script:fpsVal.Text = [string]$fps
-        $script:fpsUnit.Left = $script:fpsVal.Right + 8
+        $script:fpsUnit.Left = $script:fpsVal.Right + (V 8)
         if ($fps -ge 60)     { $script:fpsVal.ForeColor = [System.Drawing.Color]::FromArgb(110, 230, 140) }
         elseif ($fps -ge 30) { $script:fpsVal.ForeColor = [System.Drawing.Color]::FromArgb(240, 210, 90) }
         else                 { $script:fpsVal.ForeColor = [System.Drawing.Color]::FromArgb(240, 100, 100) }
