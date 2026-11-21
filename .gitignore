@@ -1,0 +1,15 @@
+# Local backups (normally written to %LOCALAPPDATA%, but just in case)
+*.b64
+
+# Logs
+*.log
+
+# OS noise
+Thumbs.db
+Desktop.ini
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
