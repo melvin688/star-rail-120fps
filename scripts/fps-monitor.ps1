@@ -480,6 +480,25 @@ function Stop-Capture {
             if ($captureId -gt 0) { $null = & taskkill.exe /F /T /PID $captureId 2>&1 }
         }
     } catch { }
+
+    # Killing PresentMon does not tear down its ETW session - the kernel keeps
+    # it until someone stops it explicitly, and a leaked session keeps holding
+    # the DXGI provider that NVIDIA's own Alt+R counter subscribes to. Stop it
+    # by name; this is a no-op when the session is already gone.
+    try {
+        $null = & logman.exe stop $sessionName -ets 2>&1
+    } catch { }
+
+    # taskkill returns before the process is actually gone, so give the session
+    # a moment and retry once - PresentMon can recreate it during shutdown.
+    Start-Sleep -Milliseconds 400
+    try {
+        $left = & logman.exe query $sessionName -ets 2>&1
+        if ($left -and ($left -notmatch 'Data Collector Set was not found')) {
+            $null = & logman.exe stop $sessionName -ets 2>&1
+        }
+    } catch { }
+
     try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
 }
 
