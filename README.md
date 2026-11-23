@@ -1,4 +1,4 @@
-# 星穹铁道 120 帧解锁（一键脚本）· Star Rail 120 FPS Unlock
+﻿# 星穹铁道 120 帧解锁（一键脚本）· Star Rail 120 FPS Unlock
 
 **中文** | [English](README.en.md)
 
@@ -77,6 +77,8 @@
 
 预期：帧率稳定接近 120，复杂场景小幅波动属正常。
 
+> 本工具只作用于《崩坏：星穹铁道》：注册表只读写星铁自己的键，帧率小窗只抓 `StarRail.exe`，守护进程也只认这个进程名。玩别的游戏时它不会启动、不会显示、也不会碰任何东西。
+
 ## 帧率小窗（FPS-MONITOR.bat）说明
 
 ![帧率小窗效果](docs/screenshot-fps-overlay.png)
@@ -118,6 +120,7 @@ net localgroup "Performance Log Users" %USERNAME% /add
 ## 常见问题
 
 - 为什么游戏设置里还是显示 30/60？→ 已知显示 bug，见上文；设置菜单里的数字不可信。
+- **用了小窗后 NVIDIA app 的 Alt+R 帧率变成 9999999？** → 旧版小窗带了 `--stop_existing_session`，而 PresentMon 的默认会话名就叫 `PresentMon`，跟 NVIDIA app 计数器用的会话同名，于是被抢了。现在小窗改用私有会话名 `StarRail120FPS`，只可能清理自己的残留会话。已经出现异常的，重启一次 NVIDIA app（或 `Alt+Z` 关掉再打开叠加层）即恢复。
 - 改过画质设置后帧率掉了？→ 游戏内动任何画面设置会把帧率重置回 60，重新跑一次解锁即可。
 - 怎么切换界面语言？→ 界面右上角点「中文 / EN」即时切换，或 `-Lang en` 参数直接启动英文界面。
 - 需要管理员权限吗？→ 解锁脚本不需要（只改当前用户自己的注册表设置）；帧率小窗需要一次授权（读系统帧事件）。

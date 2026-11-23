@@ -150,7 +150,15 @@ Write-Host '== Star Rail FPS Cap ==' -ForegroundColor Cyan
 Write-Host ''
 
 # --- 1. Locate the game's settings value --------------------------------
-$candidates = if ($KeyPath) { @($KeyPath) } else { $ClientKeys }
+$candidates = if ($KeyPath) {
+    # Self-tests only. Refuse anything that is not obviously a test key, so a
+    # typo can never rewrite another game's settings by accident.
+    if ($KeyPath -notmatch 'SELFTEST') {
+        Write-Host '[x] -KeyPath is for self-tests only (the key name must contain SELFTEST).' -ForegroundColor Red
+        exit 1
+    }
+    @($KeyPath)
+} else { $ClientKeys }
 $found = Find-SettingsValue -Candidates $candidates
 if (-not $found) {
     Write-Host '[x] Could not find the game settings in the registry.' -ForegroundColor Red

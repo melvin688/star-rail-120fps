@@ -1,4 +1,4 @@
-# Star Rail 120 FPS Unlock (one-click scripts)
+﻿# Star Rail 120 FPS Unlock (one-click scripts)
 
 [中文](README.md) | **English**
 
@@ -77,6 +77,8 @@ Note: after unlocking, the in-game Settings → FPS value may still display 30/6
 
 Expect a steady frame rate close to 120; small dips in heavy scenes are normal.
 
+> This tool only ever acts on Honkai: Star Rail. The registry mode reads and writes Star Rail's own key only, the overlay captures `StarRail.exe` only, and the watcher watches nothing else. Launch another game and none of it starts, shows, or touches anything.
+
 ## The FPS counter (FPS-MONITOR.bat)
 
 ![FPS overlay preview](docs/screenshot-fps-overlay.png)
@@ -118,6 +120,7 @@ Takes effect **after you sign out and back in**; `FPS-MONITOR.bat` will no longe
 ## FAQ
 
 - The game still shows 30/60 in settings. → Known display bug, see above; trust the external counter.
+- **NVIDIA app's Alt+R counter shows 9999999 after using the overlay?** → Older builds passed `--stop_existing_session`, and PresentMon's default session is named `PresentMon` - the same name NVIDIA app uses for its counter, so the two fought over it. The overlay now runs on a private session called `StarRail120FPS` and can only ever clear its own leftovers. If yours is already stuck, restart NVIDIA app (or toggle the overlay off and on with `Alt+Z`).
 - Frame rate dropped back after I changed graphics options. → Any in-game graphics change resets the cap to 60; unlock again.
 - How do I change the GUI language? → Click 中文 / EN at the top right, or start with `-Lang en`.
 - Does it need admin rights? → The unlock script does not (it only edits your own user registry setting). The FPS counter needs one elevation prompt (to read system frame events).

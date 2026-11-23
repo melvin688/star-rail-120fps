@@ -13,15 +13,20 @@
     Stopping it:
         game-watch.ps1 -Stop        (or turn the option off in the GUI)
 
+    Only ever watches Star Rail - the process name is fixed, not a parameter,
+    so this can never fire on some other game you happen to launch.
+
     Distributed under the MIT License. See the LICENSE file in the repository root.
 #>
 param(
     [switch]$Stop,
-    [string]$ProcessName = 'StarRail',
     [int]$IntervalSeconds = 3
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Hardcoded on purpose - the watcher only exists for Star Rail.
+$ProcessName = 'StarRail'
 
 $stateDir = Join-Path $env:LOCALAPPDATA 'star-rail-120fps'
 $pidFile  = Join-Path $stateDir 'agent.pid'

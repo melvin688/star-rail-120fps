@@ -16,12 +16,16 @@
     Distributed under the MIT License. See the LICENSE file in the repository root.
 
     Usage:
-        fps-monitor.ps1 [-ProcessName StarRail.exe]
-        FPS-MONITOR.bat -ProcessName OtherGame.exe     # monitor another game
+        fps-monitor.ps1
+
+    This overlay is deliberately locked to Star Rail: PresentMon is started with
+    --process_name StarRail.exe on a private ETW session, so it neither reads nor
+    disturbs frame data from any other game (or from NVIDIA app's own overlay).
 #>
-param(
-    [string]$ProcessName = 'StarRail.exe'
-)
+param()
+
+# Hardcoded on purpose - this tool only ever measures Star Rail.
+$ProcessName = 'StarRail.exe'
 
 $ErrorActionPreference = 'Stop'
 
@@ -88,7 +92,12 @@ if (-not $script:presentMon) {
 # --- Start PresentMon, streaming CSV on stdout ---------------------------
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $script:presentMon.FullName
-$psi.Arguments = '--process_name "' + $ProcessName + '" --output_stdout --no_console_stats --stop_existing_session --terminate_on_proc_exit'
+# The default PresentMon session is called "PresentMon" - the same name NVIDIA
+# app uses for its Alt+R counter. --stop_existing_session then kills NVIDIA's
+# session and its FPS readout collapses to 9999999. A private session name makes
+# that flag safe: it can now only ever stop our own leftover session.
+$sessionName = 'StarRail120FPS'
+$psi.Arguments = '--process_name "' + $ProcessName + '" --output_stdout --no_console_stats --session_name ' + $sessionName + ' --stop_existing_session --terminate_on_proc_exit'
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
 $psi.UseShellExecute = $false
