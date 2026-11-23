@@ -106,6 +106,9 @@ $script:L.zh = @{
     gameOn     = '游戏正在运行 · 请先完全退出再操作'
     gameOff    = '游戏未运行 · 显示器 {0} Hz'
     hzUnknown  = '游戏未运行 · 显示器 -- Hz'
+    tierTitle  = '目标帧率'
+    tier120    = '120'
+    tierAuto   = '跟随屏幕'
     btnOn      = '开启 120 FPS'
     btnOff     = '恢复 60 FPS'
     ovTitle    = '帧率小窗'
@@ -152,6 +155,9 @@ $script:L.en = @{
     gameOn     = 'Game is running - exit it before unlock/restore'
     gameOff    = 'Game not running - display {0} Hz'
     hzUnknown  = 'Game not running - display -- Hz'
+    tierTitle  = 'FPS cap'
+    tier120    = '120'
+    tierAuto   = 'Follow display'
     btnOn      = 'Unlock 120 FPS'
     btnOff     = 'Restore 60 FPS'
     ovTitle    = 'FPS overlay'
@@ -216,6 +222,8 @@ function Test-GameRunning { return [bool](Get-Process StarRail -ErrorAction Sile
 $script:sliderVal = 90
 $script:sizeKey   = 'medium'
 $script:posKey    = 'topright'
+# '120' = the verified hidden tier; 'auto' = highest tier the display can show
+$script:tierKey   = '120'
 
 # auto-start ("start the overlay with the game") is backed by a real shortcut
 # in the Startup folder - the shortcut is the single source of truth, so if the
@@ -296,6 +304,7 @@ function Load-Overlay {
         }
         if (@('small', 'medium', 'large') -contains $o.size)         { $script:sizeKey = [string]$o.size }
         if (@('topright', 'topleft', 'bottomright') -contains $o.position) { $script:posKey = [string]$o.position }
+        if (@('120', 'auto') -contains $o.tier)                      { $script:tierKey = [string]$o.tier }
     } catch { }
 }
 function Save-Overlay {
@@ -305,6 +314,7 @@ function Save-Overlay {
             opacity  = [Math]::Round($script:sliderVal / 100.0, 2)
             size     = $script:sizeKey
             position = $script:posKey
+            tier     = $script:tierKey
         }
         $json = $o | ConvertTo-Json -Compress
         [System.IO.File]::WriteAllText($script:ovFile, $json, (New-Object System.Text.UTF8Encoding $false))
@@ -394,7 +404,7 @@ $form.Font = New-Object System.Drawing.Font($F, (FS 10))
 
 $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 $desW = S 460
-$desH = S 700
+$desH = S 732
 # Keep the window inside the work area on BOTH axes; scroll instead of clipping.
 $maxW = $wa.Width - (S 60)
 $maxH = $wa.Height - (S 70)
@@ -414,7 +424,7 @@ $btnEn = New-Pill (S 394) (S 20) (S 42) (S 26); $btnEn.Text = 'EN';   $form.Cont
 # status card
 $card1 = New-Object System.Windows.Forms.Panel
 $card1.Location = New-Object System.Drawing.Point((S 24), (S 86))
-$card1.Size = New-Object System.Drawing.Size((S 412), (S 96))
+$card1.Size = New-Object System.Drawing.Size((S 412), (S 130))
 $card1.BackColor = $card
 $form.Controls.Add($card1)
 
@@ -423,9 +433,15 @@ $lblState  = New-Lbl ''  (S 40) (S 6)  (S 356) (S 26) 13 $fg $true;   $card1.Con
 $lblDetail = New-Lbl ''  (S 20) (S 42) (S 372) (S 18) 8.5 $dim $false; $card1.Controls.Add($lblDetail)
 $lblGame   = New-Lbl ''  (S 20) (S 62) (S 372) (S 18) 8.5 $dim $false; $card1.Controls.Add($lblGame)
 
+# target frame-rate tier: only 30/60/120 exist in the client, so "follow the
+# display" means picking the highest tier the monitor can actually show.
+$lblTier      = New-Lbl '' (S 20) (S 98) (S 84) (S 20) 8.5 $dim $false; $card1.Controls.Add($lblTier)
+$pillTier120  = New-Pill (S 106) (S 94) (S 78) (S 26);  $card1.Controls.Add($pillTier120)
+$pillTierAuto = New-Pill (S 192) (S 94) (S 160) (S 26); $card1.Controls.Add($pillTierAuto)
+
 # action buttons
-$btnOn  = New-FlatBtn '' (S 24) (S 198) (S 196) (S 44) 11 $true;  $form.Controls.Add($btnOn)
-$btnOff = New-FlatBtn '' (S 240) (S 198) (S 196) (S 44) 10.5 $false; $form.Controls.Add($btnOff)
+$btnOn  = New-FlatBtn '' (S 24) (S 230) (S 196) (S 44) 11 $true;  $form.Controls.Add($btnOn)
+$btnOff = New-FlatBtn '' (S 240) (S 230) (S 196) (S 44) 10.5 $false; $form.Controls.Add($btnOff)
 $btnOn.BackColor = [System.Drawing.Color]::FromArgb(30, 48, 36)
 $btnOn.ForeColor = $green
 $btnOn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(60, 120, 80)
@@ -434,7 +450,7 @@ $btnOn.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(24, 
 
 # overlay settings card
 $card2 = New-Object System.Windows.Forms.Panel
-$card2.Location = New-Object System.Drawing.Point((S 24), (S 262))
+$card2.Location = New-Object System.Drawing.Point((S 24), (S 294))
 $card2.Size = New-Object System.Drawing.Size((S 412), (S 226))
 $card2.BackColor = $card
 $form.Controls.Add($card2)
@@ -473,7 +489,7 @@ $pillAuto = New-Pill (S 284) (S 182) (S 110) (S 26); $card2.Controls.Add($pillAu
 
 # notes card
 $card3 = New-Object System.Windows.Forms.Panel
-$card3.Location = New-Object System.Drawing.Point((S 24), (S 504))
+$card3.Location = New-Object System.Drawing.Point((S 24), (S 536))
 $card3.Size = New-Object System.Drawing.Size((S 412), (S 164))
 $card3.BackColor = $card
 $form.Controls.Add($card3)
@@ -481,7 +497,7 @@ $form.Controls.Add($card3)
 $lblNotesTitle = New-Lbl '' (S 18) (S 12) (S 200) (S 22) 11 $fg $true; $card3.Controls.Add($lblNotesTitle)
 $lblNotes = New-Lbl '' (S 18) (S 40) (S 378) (S 114) 8.5 $dim $false; $card3.Controls.Add($lblNotes)
 
-$lblFooter = New-Lbl '' (S 24) (S 676) (S 412) (S 18) 8 $dim2 $false; $form.Controls.Add($lblFooter)
+$lblFooter = New-Lbl '' (S 24) (S 708) (S 412) (S 18) 8 $dim2 $false; $form.Controls.Add($lblFooter)
 
 # --- slider painting -----------------------------------------------------
 $script:sliderDrag = $false
@@ -539,7 +555,23 @@ function Update-Preview {
     $posName = @{ topright = $L.posTR; topleft = $L.posTL; bottomright = $L.posBR }[$script:posKey]
     $lblPreview.Text = $L.preview -f $d[0], $d[1], $script:sliderVal, $posName
 }
+# Show what "follow the display" resolves to right now (60 Hz screens land on
+# 60, i.e. no unlock at all - worth knowing before clicking unlock).
+function Update-TierLabel {
+    $hz = Get-MaxHz
+    $tier = 30
+    if ($hz -ge 120) { $tier = 120 } elseif ($hz -ge 60) { $tier = 60 }
+    if ($script:lang -eq 'zh') {
+        $txt = (($script:L.zh.tierAuto) + ' · ' + $tier)
+    } else {
+        $txt = (($script:L.en.tierAuto) + ' · ' + $tier)
+    }
+    if ($pillTierAuto.Text -ne $txt) { $pillTierAuto.Text = $txt }
+}
+
 function Update-Pills {
+    Style-Pill $pillTier120  ($script:tierKey -eq '120')
+    Style-Pill $pillTierAuto ($script:tierKey -eq 'auto')
     Style-Pill $pillS  ($script:sizeKey -eq 'small')
     Style-Pill $pillM  ($script:sizeKey -eq 'medium')
     Style-Pill $pillL  ($script:sizeKey -eq 'large')
@@ -573,6 +605,7 @@ function Refresh-Status {
         if ($hz -gt 0) { $lblGame.Text = ($L.gameOff -f $hz) } else { $lblGame.Text = $L.hzUnknown }
         $lblGame.ForeColor = $dim
     }
+    try { Update-TierLabel } catch { }
 }
 function Apply-Language {
     $L = $script:L[$script:lang]
@@ -595,6 +628,9 @@ function Apply-Language {
     $lblNotesTitle.Text = $L.notesTitle
     $lblNotes.Text = ($L.notes -join "`n")
     $lblFooter.Text = $L.footer
+    $lblTier.Text = $L.tierTitle
+    $pillTier120.Text = $L.tier120
+    Update-TierLabel
     $lblAuto.Text = $L.autoTitle
     Sync-AutoStart
     Style-Pill $pillAuto $script:autoStart
@@ -617,7 +653,9 @@ function Invoke-Cap([string]$mode) {
     $btnOn.Enabled = $false
     $btnOff.Enabled = $false
     try {
-        $out = & $script:capScript -Mode $mode 2>&1 | Out-String
+        $capArgs = @('-Mode', $mode)
+        if ($mode -eq 'unlock' -and $script:tierKey -eq 'auto') { $capArgs += '-Auto' }
+        $out = & $script:capScript @capArgs 2>&1 | Out-String
         $code = $LASTEXITCODE
     } catch {
         $out = $_.Exception.Message
@@ -655,12 +693,22 @@ $pillAuto.Add_Click({
     Style-Pill $pillAuto $script:autoStart
     if ($script:autoStart) { $pillAuto.Text = $L.autoOn } else { $pillAuto.Text = $L.autoOff }
 })
+$pillTier120.Add_Click({  $script:tierKey = '120';  Update-Pills; Save-Overlay })
+$pillTierAuto.Add_Click({ $script:tierKey = 'auto'; Update-Pills; Save-Overlay })
 $pillS.Add_Click({ $script:sizeKey = 'small';   Update-Pills; Update-Preview; Save-Overlay })
 $pillM.Add_Click({ $script:sizeKey = 'medium';  Update-Pills; Update-Preview; Save-Overlay })
 $pillL.Add_Click({ $script:sizeKey = 'large';   Update-Pills; Update-Preview; Save-Overlay })
-$pillTR.Add_Click({ $script:posKey = 'topright';    Update-Pills; Update-Preview; Save-Overlay })
-$pillTL.Add_Click({ $script:posKey = 'topleft';     Update-Pills; Update-Preview; Save-Overlay })
-$pillBR.Add_Click({ $script:posKey = 'bottomright'; Update-Pills; Update-Preview; Save-Overlay })
+# picking a corner discards any position the user dragged the overlay to,
+# otherwise the saved coordinates would keep overriding the preset
+function Clear-DraggedPos {
+    try {
+        $p = Join-Path $script:ovDir 'position.json'
+        if (Test-Path $p) { Remove-Item $p -Force }
+    } catch { }
+}
+$pillTR.Add_Click({ $script:posKey = 'topright';    Clear-DraggedPos; Update-Pills; Update-Preview; Save-Overlay })
+$pillTL.Add_Click({ $script:posKey = 'topleft';     Clear-DraggedPos; Update-Pills; Update-Preview; Save-Overlay })
+$pillBR.Add_Click({ $script:posKey = 'bottomright'; Clear-DraggedPos; Update-Pills; Update-Preview; Save-Overlay })
 
 Load-Overlay
 

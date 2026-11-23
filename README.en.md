@@ -54,6 +54,17 @@ The "FPS overlay" card has a **Start with the game** switch:
 
 > This switch is off by default. "No auto-start entries" describes the default state — the tool never adds one behind your back.
 
+The watcher also keeps an eye on the cap: if you change a graphics option in-game (the game resets it to 60 on the way out), a tray balloon reminds you to unlock again.
+
+### FPS tier: 120, or follow the display
+
+The first card has an **FPS cap** row with two options:
+
+- **120** (default): the only hidden high-refresh tier the client has, and the highest value the community has verified
+- **Follow · N**: picks the highest of the 30/60/120 tiers that does not exceed the primary display's refresh rate; N is what would be written right now
+
+The client accepts exactly 30, 60 and 120 — writing 144 or 165 is silently ignored (community-tested, and PCGamingWiki lists the same three tiers). That means "follow the display" equals 60 on a 60 Hz panel (no unlock at all) and 120 on anything 120 Hz or faster.
+
 ## Verify the frame rate
 
 Note: after unlocking, the in-game Settings → FPS value may still display 30/60 — that is a known display bug caused by the hidden option. Trust an external counter instead:
@@ -90,9 +101,13 @@ Run `StarRail-120FPS.bat` and use the "FPS overlay" card at the bottom:
 
 Changes are written straight to `%LOCALAPPDATA%\star-rail-120fps\overlay.json`, and the next `FPS-MONITOR.bat` launch uses that style. Delete the file to go back to defaults.
 
+Drag the overlay anywhere and the drop position is saved to `%LOCALAPPDATA%\star-rail-120fps\position.json`, so the next launch lands back there. Clicking any corner preset (top-right / top-left / bottom-right) clears that memory and returns to the preset.
+
 ### Making it permanently admin-free (optional)
 
-PresentMon officially supports a non-elevated path: add your user to the `Performance Log Users` system group. Run once as administrator:
+PresentMon officially supports a non-elevated path: add your user to the `Performance Log Users` system group.
+
+Easiest way: run `ENABLE-NO-UAC.bat` from the repository (it asks for administrator rights once, adds you to the group, and tells you what to do next). To do it by hand, run once as administrator:
 
 ```bat
 net localgroup "Performance Log Users" %USERNAME% /add

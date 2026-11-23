@@ -53,6 +53,44 @@ function Get-AgentPid {
     return 0
 }
 
+# Read the FPS tier the game currently has stored. Read-only: the watcher never
+# writes the registry, it only notices when the cap falls back to 60.
+function Get-CurrentFps {
+    foreach ($k in @('Software\Cognosphere\Star Rail', 'Software\miHoYo\崩坏：星穹铁道')) {
+        $psPath = 'HKCU:\' + $k
+        if (-not (Test-Path -LiteralPath $psPath)) { continue }
+        try {
+            $item = Get-Item -LiteralPath $psPath
+            $names = @($item.GetValueNames() | Where-Object { $_ -like 'GraphicsSettings_Model_h*' })
+            if ($names.Count -eq 0) { continue }
+            $raw = $item.GetValue($names[0])
+            if ($raw -isnot [byte[]]) { continue }
+            $text = [System.Text.Encoding]::UTF8.GetString($raw)
+            if ($text -match '"FPS":(\d+)') { return [int]$Matches[1] }
+        } catch { }
+    }
+    return -1
+}
+
+# One-shot tray balloon. The watcher runs windowless, so this is the only way to
+# tell the user something without stealing focus mid-game.
+function Show-Toast([string]$title, [string]$text) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $ni = New-Object System.Windows.Forms.NotifyIcon
+        $ni.Icon = [System.Drawing.SystemIcons]::Information
+        $ni.Visible = $true
+        $ni.BalloonTipTitle = $title
+        $ni.BalloonTipText = $text
+        $ni.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Warning
+        $ni.ShowBalloonTip(8000)
+        Start-Sleep -Milliseconds 3000
+        $ni.Visible = $false
+        $ni.Dispose()
+    } catch { }
+}
+
 # --- -Stop -----------------------------------------------------------------
 if ($Stop) {
     $existing = Get-AgentPid
@@ -100,9 +138,27 @@ function Test-OverlayRunning {
 Write-Log "agent started (pid $PID, watching $ProcessName, every ${IntervalSeconds}s)"
 
 $launched = $false
+$lastFps  = -1
+$tick     = 0
 try {
     while ($true) {
         $game = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        $tick++
+
+        if ($game) {
+            # check the stored cap about every 30 s; the game rewrites it to 60
+            # whenever you change a graphics option in-game
+            if (($tick % 10) -eq 0) {
+                $now = Get-CurrentFps
+                if ($now -gt 0) {
+                    if ($lastFps -ge 120 -and $now -lt 120) {
+                        Write-Log "FPS cap fell back: $lastFps -> $now"
+                        Show-Toast 'Star Rail 120 FPS' ('The FPS cap fell back to ' + $now + ' - the game rewrote it after a graphics-setting change. Open the tool and click unlock again.')
+                    }
+                    $lastFps = $now
+                }
+            }
+        }
 
         if ($game) {
             if (-not $launched) {

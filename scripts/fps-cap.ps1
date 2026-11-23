@@ -11,7 +11,16 @@
     Usage:
         fps-cap.ps1 -Mode status     Show the current cap (read-only, default)
         fps-cap.ps1 -Mode unlock     Set the cap to 120
+        fps-cap.ps1 -Mode unlock -TargetFps 60    Use a specific tier
+        fps-cap.ps1 -Mode unlock -Auto            Pick the tier from the display
         fps-cap.ps1 -Mode restore    Set the cap back to 60 (official default)
+
+    Frame-rate tiers:
+        The game accepts exactly 30, 60 and 120. Values above 120 are ignored by
+        the client (community-tested; v1.5+ clamps to the three tiers), so this
+        script never writes anything outside that set. -Auto maps the primary
+        display's refresh rate onto the nearest tier that does not exceed it:
+        120+ Hz -> 120, 60-119 Hz -> 60, below 60 Hz -> 30.
 
     Notes:
         * Close the game before unlock/restore - the game rewrites this value
@@ -28,12 +37,86 @@ param(
     [ValidateSet('status', 'unlock', 'restore')]
     [string]$Mode = 'status',
 
+    # Target tier for -Mode unlock. The game only honours 30/60/120.
+    [int]$TargetFps = 120,
+
+    # Derive the tier from the primary display's refresh rate instead.
+    [switch]$Auto,
+
     # For self-tests only: override the registry key path
     # (e.g. 'Software\Cognosphere\Star Rail-SELFTEST').
     [string]$KeyPath
 )
 
 $ErrorActionPreference = 'Stop'
+
+$SupportedTiers = @(30, 60, 120)
+
+# --- primary display refresh rate (WMI mixes up iGPU/dGPU values) ---------
+if (-not ('CapHz' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class CapHz {
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+    public struct DEVMODE {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmDeviceName;
+        public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public int dmFields;
+        public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+    [DllImport("user32.dll", CharSet=CharSet.Ansi)]
+    public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+    static DEVMODE Blank() {
+        DEVMODE d = new DEVMODE();
+        d.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+        return d;
+    }
+    public static int Current() {
+        DEVMODE d = Blank();
+        if (EnumDisplaySettings(null, -1, ref d)) return d.dmDisplayFrequency;
+        return 0;
+    }
+    public static int Max() {
+        DEVMODE cur = Blank();
+        if (!EnumDisplaySettings(null, -1, ref cur)) return 0;
+        int best = cur.dmDisplayFrequency;
+        for (int i = 0; i < 500; i++) {
+            DEVMODE d = Blank();
+            if (!EnumDisplaySettings(null, i, ref d)) break;
+            if (d.dmPelsWidth != cur.dmPelsWidth || d.dmPelsHeight != cur.dmPelsHeight) continue;
+            if (d.dmDisplayFrequency > best) best = d.dmDisplayFrequency;
+        }
+        return best;
+    }
+}
+'@
+}
+
+function Get-DisplayHz {
+    $hz = 0
+    try { $hz = [CapHz]::Max() } catch { }
+    if ($hz -le 0) {
+        try {
+            $hz = (Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop |
+                   Measure-Object -Property CurrentRefreshRate -Maximum).Maximum
+        } catch { }
+    }
+    return [int]$hz
+}
+
+# Highest useful tier for a display: never exceed the refresh rate, never
+# write a value the client does not understand.
+function Get-TierForHz([int]$hz) {
+    if ($hz -ge 120) { return 120 }
+    if ($hz -ge 60)  { return 60 }
+    return 30
+}
 
 $ClientKeys = @(
     'Software\Cognosphere\Star Rail',       # Global client
@@ -91,14 +174,34 @@ Write-Host ('[i] Current cap : ' + $current + ' FPS')
 if ($Mode -eq 'status') { exit 0 }
 
 # --- 2. Refuse to write while the game is running -----------------------
-if (Get-Process -Name 'StarRail' -ErrorAction SilentlyContinue) {
+# (skipped when -KeyPath points at a test key, which the game never touches)
+if (-not $KeyPath -and (Get-Process -Name 'StarRail' -ErrorAction SilentlyContinue)) {
     Write-Host '[x] ABORT: StarRail is running. Close the game completely first -' -ForegroundColor Red
     Write-Host '    the game rewrites this setting on exit and would overwrite the change.'
     exit 1
 }
 
 $target = 60
-if ($Mode -eq 'unlock') { $target = 120 }
+$tierNote = $null
+if ($Mode -eq 'unlock') {
+    if ($Auto) {
+        $hz = Get-DisplayHz
+        if ($hz -gt 0) {
+            $target = Get-TierForHz $hz
+            $tierNote = 'display ' + $hz + ' Hz -> ' + $target + ' FPS tier'
+        } else {
+            $target = 120
+            $tierNote = 'display refresh rate unknown -> using the 120 FPS tier'
+        }
+    } elseif ($SupportedTiers -contains $TargetFps) {
+        $target = $TargetFps
+    } else {
+        Write-Host ('[!] ' + $TargetFps + ' FPS is not a tier the game accepts (30/60/120) - using 120.') -ForegroundColor Yellow
+        $target = 120
+    }
+}
+if ($target -gt 120) { $target = 120 }   # hard ceiling: the client ignores anything above 120
+if ($tierNote) { Write-Host ('[i] ' + $tierNote) }
 
 if ($current -eq $target) {
     Write-Host ('[=] Already at ' + $target + ' FPS - nothing to do.')
@@ -141,12 +244,9 @@ Write-Host ''
 
 # --- 6. Post-unlock guidance --------------------------------------------
 if ($Mode -eq 'unlock') {
-    $maxHz = 0
-    try {
-        $maxHz = (Get-CimInstance -ClassName Win32_VideoController | Measure-Object -Property MaxRefreshRate -Maximum).Maximum
-    } catch { }
+    $maxHz = Get-DisplayHz
     if ($maxHz -gt 0 -and $maxHz -lt 120) {
-        Write-Host ('[!] Your display reports a max refresh rate of ' + $maxHz + ' Hz - the gain from a 120 FPS cap may be limited.') -ForegroundColor Yellow
+        Write-Host ('[!] Your display reports a max refresh rate of ' + $maxHz + ' Hz - so ' + $target + ' FPS is the most you will actually see.') -ForegroundColor Yellow
         Write-Host ''
     }
     Write-Host 'Launch the game and verify the real frame rate with any of these:' -ForegroundColor Cyan

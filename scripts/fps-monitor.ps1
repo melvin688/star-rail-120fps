@@ -62,6 +62,16 @@ if (Test-Path $ovFile) {
     } catch { }
 }
 
+# A position the user dragged the overlay to wins over the preset corner.
+$script:ovXY  = $null
+$script:posFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\position.json'
+if (Test-Path $script:posFile) {
+    try {
+        $q = Get-Content $script:posFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $q.x -and $null -ne $q.y) { $script:ovXY = @([int]$q.x, [int]$q.y) }
+    } catch { }
+}
+
 # Everything inside the panel scales with its width (base design is 210x84).
 $script:sc = $script:ovW / 210.0
 function V([double]$p)  { return [int][Math]::Round($p * $script:sc) }
@@ -143,6 +153,12 @@ switch ($script:ovPos) {
     default       { $px = $wa.Right - $script:ovW - $margin;         $py = $wa.Top + $margin }
 }
 $script:form.Location = New-Object System.Drawing.Point($px, $py)
+if ($script:ovXY) {
+    # clamp: the monitor layout may have changed since the position was saved
+    $cx = [Math]::Min([Math]::Max($script:ovXY[0], $wa.Left), [Math]::Max($wa.Left, $wa.Right - $script:ovW))
+    $cy = [Math]::Min([Math]::Max($script:ovXY[1], $wa.Top),  [Math]::Max($wa.Top,  $wa.Bottom - $script:ovH))
+    $script:form.Location = New-Object System.Drawing.Point($cx, $cy)
+}
 
 # rounded corners - looks like a modern overlay panel
 $rr = [Math]::Max(4, (V 8))
@@ -201,7 +217,20 @@ foreach ($c in $script:dragables) {
             $script:dy = $_.Y
         }
     })
-    $c.Add_MouseUp({ $script:drag = $false })
+    $c.Add_MouseUp({
+        $script:drag = $false
+        try {
+            $pair = '' + $script:form.Left + ',' + $script:form.Top
+            if ($script:lastXY -ne $pair) {
+                $script:lastXY = $pair
+                $dir = Join-Path $env:LOCALAPPDATA 'star-rail-120fps'
+                if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+                $json = '{"x":' + $script:form.Left + ',"y":' + $script:form.Top + '}'
+                [System.IO.File]::WriteAllText((Join-Path $dir 'position.json'), $json,
+                    (New-Object System.Text.UTF8Encoding $false))
+            }
+        } catch { }
+    })
 }
 
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
