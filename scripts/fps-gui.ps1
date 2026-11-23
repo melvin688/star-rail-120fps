@@ -113,6 +113,7 @@ $script:L.zh = @{
     btnOff     = '恢复 60 FPS'
     ovTitle    = '帧率小窗'
     ovLaunch   = '启动小窗 →'
+    ovClose    = '关闭小窗 ✕'
     autoTitle  = '开游戏时自动启动'
     autoOn     = '已开启'
     autoOff    = '已关闭'
@@ -134,6 +135,8 @@ $script:L.zh = @{
         '· 解锁后请勿再动游戏内画面/帧率设置，否则会重置回 60',
         '· 游戏设置界面显示 30/60 是正常现象，以帧率小窗为准',
         '· 想还原官方默认：随时点「恢复 60 FPS」',
+        '· 小窗可拖动；Ctrl+Alt+L 锁定（锁定后鼠标穿透，不挡游戏操作）',
+        '· Ctrl+Alt+H 隐藏/显示小窗，Ctrl+Alt+F 关闭',
         '· 「开游戏时自动启动」会在启动文件夹放一个快捷方式，随时可关',
         '· 备份保存在本机 %LOCALAPPDATA%\star-rail-120fps\'
     )
@@ -162,6 +165,7 @@ $script:L.en = @{
     btnOff     = 'Restore 60 FPS'
     ovTitle    = 'FPS overlay'
     ovLaunch   = 'Launch →'
+    ovClose    = 'Close ✕'
     autoTitle  = 'Start with the game'
     autoOn     = 'On'
     autoOff    = 'Off'
@@ -183,6 +187,8 @@ $script:L.en = @{
         '· Do not touch in-game graphics/FPS settings after unlocking',
         '· In-game menu still showing 30/60 is normal; trust the counter',
         '· Restore the official default anytime: "Restore 60 FPS"',
+        '· Drag the overlay anywhere; Ctrl+Alt+L locks it (clicks pass through)',
+        '· Ctrl+Alt+H hides/shows it, Ctrl+Alt+F closes it',
         '· "Start with the game" adds a Startup shortcut, removable here',
         '· Backup kept in %LOCALAPPDATA%\star-rail-120fps\'
     )
@@ -251,6 +257,28 @@ function Get-MaxHz {
 function Sync-AutoStart {
     $script:autoStart = Test-Path -LiteralPath $script:startupLnk
 }
+function Stop-Overlay {
+    # Closing from the main window: the overlay itself also closes via
+    # Ctrl+Alt+F or its right-click menu.
+    try {
+        Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -and $_.CommandLine -like '*fps-monitor.ps1*' } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    } catch { }
+}
+
+function Sync-OverlayButton {
+    $L = $script:L[$script:lang]
+    if (-not $btnOvLaunch) { return }
+    if (Test-OverlayRunning) {
+        $btnOvLaunch.Text = $L.ovClose
+        $btnOvLaunch.ForeColor = [System.Drawing.Color]::FromArgb(210, 120, 120)
+    } else {
+        Sync-OverlayButton
+        $btnOvLaunch.ForeColor = $green
+    }
+}
+
 function Test-OverlayRunning {
     # A second PresentMon session would steal the first one's ETW session, so the
     # launcher refuses to start a duplicate overlay.
@@ -675,9 +703,10 @@ $btnOff.Add_Click({ Invoke-Cap 'restore' })
 $btnZh.Add_Click({ $script:lang = 'zh'; Apply-Language })
 $btnEn.Add_Click({ $script:lang = 'en'; Apply-Language })
 $btnOvLaunch.Add_Click({
-    if (-not (Test-Path $script:monBat)) { return }
-    if (Test-OverlayRunning) { return }          # avoid a second PresentMon stealing the ETW session
-    Start-Process -FilePath $script:monBat
+    if (Test-OverlayRunning) { Stop-Overlay }
+    elseif (Test-Path $script:monBat) { Start-Process -FilePath $script:monBat }
+    Start-Sleep -Milliseconds 400
+    Sync-OverlayButton
 })
 $pillAuto.Add_Click({
     $L = $script:L[$script:lang]
@@ -716,7 +745,7 @@ Load-Overlay
 # after the user closes the game.
 $script:refreshTimer = New-Object System.Windows.Forms.Timer
 $script:refreshTimer.Interval = 2000
-$script:refreshTimer.Add_Tick({ try { Refresh-Status } catch { } })
+$script:refreshTimer.Add_Tick({ try { Refresh-Status } catch { }; try { Sync-OverlayButton } catch { } })
 
 $form.Add_Shown({
     [void](Get-MaxHz)                 # warm the WMI query before the first timer tick

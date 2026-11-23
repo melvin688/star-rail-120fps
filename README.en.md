@@ -1,4 +1,4 @@
-﻿# Star Rail 120 FPS Unlock (one-click scripts)
+# Star Rail 120 FPS Unlock (one-click scripts)
 
 [中文](README.md) | **English**
 
@@ -104,6 +104,19 @@ Run `StarRail-120FPS.bat` and use the "FPS overlay" card at the bottom:
 Changes are written straight to `%LOCALAPPDATA%\star-rail-120fps\overlay.json`, and the next `FPS-MONITOR.bat` launch uses that style. Delete the file to go back to defaults.
 
 Drag the overlay anywhere and the drop position is saved to `%LOCALAPPDATA%\star-rail-120fps\position.json`, so the next launch lands back there. Clicking any corner preset (top-right / top-left / bottom-right) clears that memory and returns to the preset.
+
+### Overlay controls
+
+| Action | How |
+|---|---|
+| Move | Drag anywhere on the panel; the drop position is remembered |
+| Lock / unlock | `Ctrl+Alt+L`, or the right-click menu |
+| Hide / show | `Ctrl+Alt+H` |
+| Close | `Ctrl+Alt+F`, or the right-click menu |
+
+A locked overlay fades slightly and shows `FPS LOCK`; from then on clicks pass straight through to the game, so it can't be dragged or clicked by accident. Unlocking is `Ctrl+Alt+L` only - once locked it no longer receives mouse input, which is the point.
+
+Two things are needed to drag it over the game: the game must run in **borderless windowed** or **windowed** mode (exclusive fullscreen hides every overlay), and the overlay is always-on-top (it is by default).
 
 ### Making it permanently admin-free (optional)
 

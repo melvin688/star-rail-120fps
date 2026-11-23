@@ -47,6 +47,29 @@ public class DpiUtil {
 '@
 try { [void][DpiUtil]::SetProcessDPIAware() } catch { }
 
+# Locked mode makes the overlay click-through (WS_EX_TRANSPARENT) so clicks land
+# on the game instead of being eaten by a window you are not trying to touch.
+# Hotkey state is polled rather than registered system-wide: RegisterHotKey would
+# take Ctrl+Alt+L away from every other app, and polling still works while the
+# game holds focus and the overlay ignores the mouse.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class OvWin {
+    [DllImport("user32.dll", SetLastError=true)] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll", SetLastError=true)] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
+    public const int GWL_EXSTYLE    = -20;
+    public const int WS_EX_TRANSPARENT = 0x20;
+    public static void SetClickThrough(IntPtr h, bool on) {
+        int ex = GetWindowLong(h, GWL_EXSTYLE);
+        if (on) { ex |= WS_EX_TRANSPARENT; } else { ex &= ~WS_EX_TRANSPARENT; }
+        SetWindowLong(h, GWL_EXSTYLE, ex);
+    }
+    public static bool Down(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+}
+'@
+
 # --- Overlay preferences (written by the GUI) ----------------------------
 $script:ovOpacity = 0.90
 $script:ovW       = 210
@@ -213,18 +236,24 @@ $script:form.Controls.Add($script:info)
 
 # drag anywhere; right-click -> Exit
 $script:drag = $false
-$script:dx = 0
-$script:dy = 0
+$script:dragOrigin = $null
+$script:dragWin = $null
 $script:dragables = @($script:form, $script:fpsVal, $script:fpsUnit, $script:info)
 foreach ($c in $script:dragables) {
-    $c.Add_MouseDown({ $script:drag = $true; $script:dx = $_.X; $script:dy = $_.Y })
+    $c.Add_MouseDown({
+        if ($script:locked) { return }
+        $script:drag = $true
+        # screen coordinates, not control-relative ones: the control moves under
+        # the cursor mid-drag, so relative math drifts on fast moves
+        $script:dragOrigin = [System.Windows.Forms.Cursor]::Position
+        $script:dragWin = $script:form.Location
+    })
     $c.Add_MouseMove({
-        if ($script:drag) {
-            $script:form.Left += ($_.X - $script:dx)
-            $script:form.Top += ($_.Y - $script:dy)
-            $script:dx = $_.X
-            $script:dy = $_.Y
-        }
+        if (-not $script:drag) { return }
+        $p = [System.Windows.Forms.Cursor]::Position
+        $nx = $script:dragWin.X + ($p.X - $script:dragOrigin.X)
+        $ny = $script:dragWin.Y + ($p.Y - $script:dragOrigin.Y)
+        $script:form.Location = New-Object System.Drawing.Point($nx, $ny)
     })
     $c.Add_MouseUp({
         $script:drag = $false
@@ -242,9 +271,40 @@ foreach ($c in $script:dragables) {
     })
 }
 
+# --- Lock (click-through), hide and close --------------------------------
+$script:locked = $false
+function Set-OverlayLock([bool]$on) {
+    $script:locked = $on
+    try { [OvWin]::SetClickThrough($script:form.Handle, $on) } catch { }
+    if ($on) {
+        # fade a little so it reads as "not interactive" at a glance
+        $script:form.Opacity = [Math]::Max(0.45, $script:ovOpacity - 0.2)
+        $script:fpsUnit.Text = 'FPS  LOCK'
+        $script:fpsUnit.Left = $script:fpsVal.Right + (V 8)
+        $script:miLock.Text = 'Unlock  (Ctrl+Alt+L)'
+        $script:miHide.Enabled = $false
+    } else {
+        $script:form.Opacity = $script:ovOpacity
+        $script:fpsUnit.Text = 'FPS'
+        $script:fpsUnit.Left = $script:fpsVal.Right + (V 8)
+        $script:miLock.Text = 'Lock position  (Ctrl+Alt+L)'
+        $script:miHide.Enabled = $true
+    }
+}
+
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
-$null = $script:menu.Items.Add('Exit')
-$script:menu.Items[0].Add_Click({ $script:form.Close() })
+$script:miLock = New-Object System.Windows.Forms.ToolStripMenuItem
+$script:miHide = New-Object System.Windows.Forms.ToolStripMenuItem
+$script:miExit = New-Object System.Windows.Forms.ToolStripMenuItem
+$script:miLock.Text = 'Lock position  (Ctrl+Alt+L)'
+$script:miHide.Text = 'Hide  (Ctrl+Alt+H)'
+$script:miExit.Text = 'Close  (Ctrl+Alt+F)'
+[void]$script:menu.Items.Add($script:miLock)
+[void]$script:menu.Items.Add($script:miHide)
+[void]$script:menu.Items.Add($script:miExit)
+$script:miLock.Add_Click({ Set-OverlayLock (-not $script:locked) })
+$script:miHide.Add_Click({ $script:form.Hide() })
+$script:miExit.Add_Click({ $script:form.Close() })
 $script:form.ContextMenuStrip = $script:menu
 foreach ($c in $script:dragables) { $c.ContextMenuStrip = $script:menu }
 
@@ -342,13 +402,45 @@ $script:timer.Add_Tick({
     }
 })
 
+# --- Global hotkeys ------------------------------------------------------
+# Ctrl+Alt+L  lock / unlock     (the only escape once click-through is on)
+# Ctrl+Alt+H  hide / show       (works without a usable mouse)
+# Ctrl+Alt+F  close
+# Polled on a fast timer so it works while the game owns focus, and nothing is
+# registered system-wide that could clash with the game's own bindings.
+$script:hk = @{}
+$script:hkTimer = New-Object System.Windows.Forms.Timer
+$script:hkTimer.Interval = 120
+$script:hkTimer.Add_Tick({
+    $ctrl = [OvWin]::Down(0x11)
+    $alt  = [OvWin]::Down(0x12)
+    $states = @{
+        lock = ($ctrl -and $alt -and [OvWin]::Down(0x4C))
+        hide = ($ctrl -and $alt -and [OvWin]::Down(0x48))
+        quit = ($ctrl -and $alt -and [OvWin]::Down(0x46))
+    }
+    foreach ($k in @('lock', 'hide', 'quit')) {
+        $now = $states[$k]
+        $was = $script:hk[$k]
+        $script:hk[$k] = $now
+        if (-not ($now -and -not $was)) { continue }
+        switch ($k) {
+            'lock' { Set-OverlayLock (-not $script:locked) }
+            'hide' { if ($script:form.Visible) { $script:form.Hide() } else { $script:form.Show(); $script:form.TopMost = $true } }
+            'quit' { $script:form.Close() }
+        }
+    }
+})
+
 # --- Run -----------------------------------------------------------------
 $script:form.Add_FormClosed({
     try { $script:timer.Stop() } catch { }
+    try { $script:hkTimer.Stop() } catch { }
     try { if (-not $script:proc.HasExited) { $script:proc.Kill() } } catch { }
 })
 
 $script:timer.Start()
+$script:hkTimer.Start()
 [void]$script:form.ShowDialog()
 
 # window closed - make sure PresentMon is gone too
