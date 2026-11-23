@@ -238,6 +238,33 @@ $script:info.Text = 'waiting ...'
 $script:info.Cursor = [System.Windows.Forms.Cursors]::SizeAll
 $script:form.Controls.Add($script:info)
 
+# Close button. The window has no title bar and stays out of the taskbar, so
+# without this there is no visible way out - only the hotkey and a right-click
+# menu, which nobody finds. It sits invisible until the pointer is over the
+# panel, so it never draws attention during play.
+$script:btnClose = New-Object System.Windows.Forms.Label
+$script:btnClose.AutoSize = $false
+$script:btnClose.Size = New-Object System.Drawing.Size((V 18), (V 18))
+$script:btnClose.Location = New-Object System.Drawing.Point(($script:ovW - (V 24)), (V 5))
+$script:btnClose.Font = New-Object System.Drawing.Font('Segoe UI', (VF 8.5))
+$script:btnClose.Text = [string][char]0x2715
+$script:btnClose.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$script:btnClose.BackColor = [System.Drawing.Color]::Transparent
+$script:btnClose.ForeColor = [System.Drawing.Color]::FromArgb(0, 255, 255, 255)
+$script:btnClose.Cursor = [System.Windows.Forms.Cursors]::Hand
+$script:btnClose.Add_MouseEnter({
+    if ($script:locked) { return }
+    $script:btnClose.ForeColor = [System.Drawing.Color]::White
+    $script:btnClose.BackColor = [System.Drawing.Color]::FromArgb(192, 57, 43)
+})
+$script:btnClose.Add_MouseLeave({
+    $script:btnClose.ForeColor = [System.Drawing.Color]::FromArgb(0, 255, 255, 255)
+    $script:btnClose.BackColor = [System.Drawing.Color]::Transparent
+})
+$script:btnClose.Add_Click({ $script:form.Close() })
+$script:form.Controls.Add($script:btnClose)
+$script:btnClose.BringToFront()
+
 # drag anywhere; right-click -> Exit
 $script:drag = $false
 $script:dragOrigin = $null
@@ -287,12 +314,15 @@ function Set-OverlayLock([bool]$on) {
         $script:fpsUnit.Left = $script:fpsVal.Right + (V 8)
         $script:miLock.Text = 'Unlock  (Ctrl+Alt+L)'
         $script:miHide.Enabled = $false
+        # the window is click-through now, so the button could not be hit anyway
+        $script:btnClose.Visible = $false
     } else {
         $script:form.Opacity = $script:ovOpacity
         $script:fpsUnit.Text = 'FPS'
         $script:fpsUnit.Left = $script:fpsVal.Right + (V 8)
         $script:miLock.Text = 'Lock position  (Ctrl+Alt+L)'
         $script:miHide.Enabled = $true
+        $script:btnClose.Visible = $true
     }
 }
 
@@ -437,12 +467,27 @@ $script:hkTimer.Add_Tick({
 })
 
 # --- Run -----------------------------------------------------------------
+# Process.Kill() alone has been unreliable here: the child can survive and then
+# keep its ETW session open, which is what leaves a stale counter behind.
+# taskkill /T takes the whole tree down by force, so use it as the real stop.
+function Stop-Capture {
+    try {
+        if ($script:proc -and -not $script:proc.HasExited) { $script:proc.Kill() }
+    } catch { }
+    try {
+        if ($script:proc) {
+            $captureId = $script:proc.Id
+            if ($captureId -gt 0) { $null = & taskkill.exe /F /T /PID $captureId 2>&1 }
+        }
+    } catch { }
+    try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
+}
+
 try { [System.IO.File]::WriteAllText($script:pidFile, [string]$PID) } catch { }
 $script:form.Add_FormClosed({
     try { $script:timer.Stop() } catch { }
     try { $script:hkTimer.Stop() } catch { }
-    try { if (-not $script:proc.HasExited) { $script:proc.Kill() } } catch { }
-    try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
+    Stop-Capture
 })
 
 $script:timer.Start()
@@ -450,6 +495,5 @@ $script:hkTimer.Start()
 [void]$script:form.ShowDialog()
 
 # window closed - make sure PresentMon is gone too
-try { if (-not $script:proc.HasExited) { $script:proc.Kill() } } catch { }
-try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
+Stop-Capture
 exit 0

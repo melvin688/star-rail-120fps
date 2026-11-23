@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>帧率小窗 · 关闭按钮设计</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    background: #141416;
+    color: #e6e6e6;
+    -webkit-font-smoothing: antialiased;
+    padding: 56px 48px;
+  }
+  h2 { font-size: 12px; font-weight: 600; color: #83838a; letter-spacing: .5px; margin-bottom: 14px; }
+  h2:not(:first-of-type) { margin-top: 42px; }
+  .cap { font-size: 11px; color: #6e6e74; margin-bottom: 10px; line-height: 1.7; }
+  .row { display: flex; align-items: flex-start; gap: 26px; flex-wrap: wrap; }
+
+  /* ---------- the overlay ---------- */
+  .ov {
+    position: relative;
+    background: rgba(13,13,15,.90);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    transition: border-color .15s;
+  }
+  .ov:hover { border-color: rgba(255,255,255,.18); }
+
+  /* medium = the default */
+  .ov.md { width: 210px; height: 84px; padding: 0 14px; }
+  .ov.sm { width: 160px; height: 64px; padding: 0 12px; }
+  .ov.lg { width: 260px; height: 104px; padding: 0 16px; }
+
+  .main { display: flex; align-items: baseline; gap: 5px; }
+  .main b {
+    font-size: 30px; line-height: 1; font-weight: 650;
+    color: #3ddc84; letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ov.sm .main b { font-size: 22px; }
+  .ov.lg .main b { font-size: 38px; }
+  .main i { font-size: 10px; font-style: normal; color: #7d7d82; letter-spacing: 1px; }
+
+  .sub {
+    display: flex; gap: 10px; margin-top: 6px;
+    font-size: 10.5px; color: #83838a;
+    font-variant-numeric: tabular-nums;
+  }
+  .sub em { font-style: normal; color: #6e6e74; }
+  .ov.sm .sub { font-size: 9.5px; gap: 8px; margin-top: 4px; }
+  .ov.lg .sub { font-size: 11.5px; margin-top: 8px; }
+
+  /* ---------- the close button ---------- */
+  .x {
+    position: absolute; top: 5px; right: 5px;
+    width: 18px; height: 18px;
+    display: grid; place-items: center;
+    border: 0; border-radius: 4px;
+    background: transparent;
+    color: rgba(255,255,255,.0);      /* invisible until hovered */
+    font-size: 11px; line-height: 1;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .ov:hover .x { color: rgba(255,255,255,.42); }   /* faint hint on hover */
+  .x:hover { background: #c0392b; color: #fff; }
+
+  /* locked: no close button at all, lock mark instead */
+  .ov.locked .x { display: none; }
+  .lockbadge {
+    position: absolute; top: 6px; right: 7px;
+    font-size: 8.5px; letter-spacing: .8px;
+    color: #e2b33c;
+    display: none;
+  }
+  .ov.locked .lockbadge { display: block; }
+  .ov.locked { background: rgba(13,13,15,.72); }
+  .ov.locked .main b { color: rgba(61,220,132,.72); }
+  .ov.locked .sub { color: rgba(131,131,138,.72); }
+
+  .ov.show-x .x { color: rgba(255,255,255,.42); }
+  .hint { font-size: 10.5px; color: #6e6e74; margin-top: 9px; line-height: 1.6; }
+  .hint code {
+    font-family: Consolas, monospace; font-size: 10px;
+    background: #1d1d21; padding: 1px 4px; border-radius: 3px; color: #b9b9bd;
+  }
+</style>
+</head>
+<body>
+
+<h2>一 · 三种状态</h2>
+<div class="row">
+
+  <div>
+    <div class="cap">默认（平时完全看不到按钮，不干扰）</div>
+    <div class="ov md" id="ov1">
+      <button class="x" aria-label="close">✕</button>
+      <span class="lockbadge">LOCK</span>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+    <div class="hint">鼠标移进来才出现淡淡的 ✕</div>
+  </div>
+
+  <div>
+    <div class="cap">悬停关闭按钮（红色，一眼能认）</div>
+    <div class="ov md">
+      <button class="x" style="background:#c0392b;color:#fff">✕</button>
+      <span class="lockbadge">LOCK</span>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+    <div class="hint">点一下直接退出，不用记快捷键</div>
+  </div>
+
+  <div>
+    <div class="cap">锁定（点击穿透，按钮收起来）</div>
+    <div class="ov md locked">
+      <button class="x">✕</button>
+      <span class="lockbadge">🔒 LOCK</span>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+    <div class="hint">锁定后只能 <code>Ctrl+Alt+F</code> 关</div>
+  </div>
+
+</div>
+
+<h2>二 · 三档尺寸（关闭按钮始终在同一个角）</h2>
+<div class="row">
+
+  <div>
+    <div class="cap">小 160 × 64</div>
+    <div class="ov sm show-x">
+      <button class="x">✕</button>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cap">中 210 × 84（默认）</div>
+    <div class="ov md show-x">
+      <button class="x">✕</button>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cap">大 260 × 104</div>
+    <div class="ov lg show-x">
+      <button class="x">✕</button>
+      <div class="main"><b>120</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 112 <em>·</em> 8.3 ms</div>
+    </div>
+  </div>
+
+</div>
+
+<h2>三 · 掉帧时的样子</h2>
+<div class="row">
+  <div>
+    <div class="cap">低于 60：数字转黄，提醒画质被重置了</div>
+    <div class="ov md">
+      <button class="x">✕</button>
+      <div class="main"><b style="color:#e2b33c">48</b><i>FPS</i></div>
+      <div class="sub"><em>1%</em> 41 <em>·</em> 20.8 ms</div>
+    </div>
+  </div>
+  <div>
+    <div class="cap">读不到数据</div>
+    <div class="ov md">
+      <button class="x">✕</button>
+      <div class="main"><b style="color:#6e6e74">--</b><i>FPS</i></div>
+      <div class="sub"><em>等待游戏</em></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // click the X to see it behave like the real thing
+  document.querySelectorAll('.x').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      const ov = b.closest('.ov');
+      ov.style.transition = 'opacity .18s, transform .18s';
+      ov.style.opacity = '0';
+      ov.style.transform = 'scale(.96)';
+      setTimeout(() => {
+        ov.style.opacity = '1';
+        ov.style.transform = 'none';
+      }, 900);
+    });
+  });
+</script>
+</body>
+</html>

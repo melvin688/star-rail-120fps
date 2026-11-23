@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方案 A · 严格网格</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    background: #1b1b1e;
+    color: #e6e6e6;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  /* ---- the fake OS window ---- */
+  .win {
+    width: 480px;
+    background: #0d0d0f;
+    border: 1px solid #2a2a2d;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  .titlebar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 0 12px;
+    background: #131315;
+    border-bottom: 1px solid #232326;
+  }
+  .titlebar span { font-size: 12px; color: #b9b9bd; letter-spacing: .2px; }
+  .tb-btns { display: flex; }
+  .tb-btns i {
+    display: grid; place-items: center;
+    width: 40px; height: 30px;
+    font-style: normal; font-size: 12px; color: #9a9a9e;
+  }
+  .tb-btns i:hover { background: #26262a; color: #fff; }
+  .tb-btns i:last-child:hover { background: #c0392b; }
+
+  .body { padding: 18px 18px 16px; }
+
+  /* ---- header ---- */
+  .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .head h1 { font-size: 17px; font-weight: 600; letter-spacing: .2px; }
+  .head p { font-size: 11.5px; color: #7d7d82; margin-top: 5px; }
+  .langs { display: flex; gap: 0; flex: none; margin-top: 1px; }
+  .langs button {
+    font: inherit; font-size: 11px;
+    padding: 4px 9px;
+    background: transparent;
+    color: #7d7d82;
+    border: 1px solid #2c2c30;
+    cursor: pointer;
+  }
+  .langs button:first-child { border-radius: 4px 0 0 4px; }
+  .langs button:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
+  .langs button.on { color: #3ddc84; border-color: #2f6b4a; background: #10231a; }
+
+  /* ---- cards ---- */
+  .card {
+    background: #131316;
+    border: 1px solid #232327;
+    border-radius: 7px;
+    padding: 16px 16px 14px;
+    margin-bottom: 14px;
+  }
+  .card:last-of-type { margin-bottom: 0; }
+  .card > h2 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #b9b9bd;
+    letter-spacing: .3px;
+    margin-bottom: 14px;
+  }
+
+  /* ---- one shared grid, used by every row in every card ---- */
+  .row {
+    display: grid;
+    grid-template-columns: 84px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+  }
+  .row + .row { margin-top: 9px; }
+  .row .k { font-size: 12px; color: #83838a; }
+  .row .v { font-size: 12px; color: #e6e6e6; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- status: no leading icon, so every line starts on the same grid x ---- */
+  .state { margin-bottom: 10px; }
+  .state b { font-size: 14px; font-weight: 600; color: #3ddc84; }
+  .meta div { font-size: 11.5px; color: #7d7d82; line-height: 1.75; }
+
+  .divider { height: 1px; background: #232327; margin: 14px 0; }
+
+  /* ---- segmented controls: equal width, always ---- */
+  .seg { display: flex; gap: 0; }
+  .seg button {
+    font: inherit; font-size: 11.5px;
+    height: 26px;
+    min-width: 52px;
+    padding: 0 10px;
+    background: #17171a;
+    color: #8a8a90;
+    border: 1px solid #2c2c30;
+    cursor: pointer;
+  }
+  .seg button + button { border-left: 0; }
+  .seg button:first-child { border-radius: 4px 0 0 4px; }
+  .seg button:last-child { border-radius: 0 4px 4px 0; }
+  .seg button.on { background: #12301f; color: #3ddc84; border-color: #2f6b4a; }
+  .seg.wide button { flex: 1; }
+
+  /* ---- slider ---- */
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .track { position: relative; flex: 1; height: 4px; background: #2c2c30; border-radius: 2px; }
+  .track i { position: absolute; left: 0; top: 0; bottom: 0; width: 88%; background: #3ddc84; border-radius: 2px; }
+  .track b {
+    position: absolute; left: 88%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    background: #e8e8e8; border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.6);
+  }
+
+  /* ---- primary actions: equal halves, inside the status card ---- */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
+  .btn {
+    font: inherit; font-size: 12.5px; font-weight: 600;
+    height: 38px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: filter .12s;
+  }
+  .btn:active { filter: brightness(.9); }
+  .btn-primary { background: #3ddc84; color: #06120c; border-color: #3ddc84; }
+  .btn-primary:hover { background: #4ee894; }
+  .btn-ghost { background: #17171a; color: #b9b9bd; border-color: #2c2c30; }
+  .btn-ghost:hover { background: #1e1e22; color: #e6e6e6; }
+
+  /* ---- overlay card: title row aligns with the same right edge ---- */
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .card-head h2 { font-size: 12px; font-weight: 600; color: #b9b9bd; letter-spacing: .3px; }
+  .link {
+    font: inherit; font-size: 11.5px;
+    background: none; border: 0; cursor: pointer;
+    color: #3ddc84; padding: 2px 0;
+  }
+  .link:hover { text-decoration: underline; }
+  .link.danger { color: #d97a72; }
+
+  .preview {
+    font-size: 11px;
+    color: #6e6e74;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #232327;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- notes: collapsed by default ---- */
+  .disclosure {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .disclosure h2 { font-size: 12px; font-weight: 600; color: #b9b9bd; letter-spacing: .3px; }
+  .disclosure .chev { font-size: 10px; color: #6e6e74; transition: transform .15s; }
+  .disclosure.open .chev { transform: rotate(90deg); }
+  .notes { display: none; margin-top: 12px; }
+  .notes.open { display: block; }
+  .notes li {
+    list-style: none;
+    font-size: 11px;
+    line-height: 1.85;
+    color: #7d7d82;
+    padding-left: 10px;
+    position: relative;
+  }
+  .notes li::before { content: "·"; position: absolute; left: 0; color: #4a4a50; }
+
+  .foot {
+    font-size: 10.5px;
+    color: #55555b;
+    text-align: center;
+    padding: 14px 0 2px;
+  }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <span>星穹铁道 120 帧工具</span>
+    <div class="tb-btns"><i>—</i><i>▢</i><i>✕</i></div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div>
+        <h1>星穹铁道 120 帧工具</h1>
+        <p>解锁官方隐藏的 120 FPS 档位 · 只修改游戏自己的设置值</p>
+      </div>
+      <div class="langs">
+        <button class="on">中文</button>
+        <button>EN</button>
+      </div>
+    </div>
+
+    <!-- status + actions live in ONE card now -->
+    <div class="card">
+      <div class="state"><b>已解锁 120 FPS</b></div>
+      <div class="meta">
+        <div>客户端：国际服 · 原值已备份（可还原）</div>
+        <div>游戏未运行 · 显示器 144 Hz</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <span class="k">目标帧率</span>
+        <div class="seg">
+          <button class="on">120</button>
+          <button>跟随屏幕 · 120</button>
+        </div>
+        <span class="v"></span>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary">开启 120 FPS</button>
+        <button class="btn btn-ghost">恢复 60 FPS</button>
+      </div>
+    </div>
+
+    <!-- overlay -->
+    <div class="card">
+      <div class="card-head">
+        <h2>帧率小窗</h2>
+        <button class="link" id="ovToggle">启动小窗 →</button>
+      </div>
+
+      <div class="row">
+        <span class="k">不透明度</span>
+        <div class="slider">
+          <div class="track"><i></i><b></b></div>
+        </div>
+        <span class="v">88%</span>
+      </div>
+
+      <div class="row">
+        <span class="k">尺寸</span>
+        <div class="seg wide"><button>小</button><button class="on">中</button><button>大</button></div>
+        <span class="v"></span>
+      </div>
+
+      <div class="row">
+        <span class="k">位置</span>
+        <div class="seg wide"><button class="on">右上</button><button>左上</button><button>右下</button></div>
+        <span class="v"></span>
+      </div>
+
+      <div class="row">
+        <span class="k">自动启动</span>
+        <div><button class="seg-single" style="font:inherit;font-size:11.5px;height:26px;padding:0 12px;background:#12301f;color:#3ddc84;border:1px solid #2f6b4a;border-radius:4px;cursor:pointer;">已开启</button></div>
+        <span class="v"></span>
+      </div>
+
+      <div class="preview">预览 210 × 84 · 88% 不透明 · 右上</div>
+    </div>
+
+    <!-- notes, collapsed -->
+    <div class="card">
+      <div class="disclosure" id="notesToggle">
+        <h2>注意事项</h2>
+        <span class="chev">▸</span>
+      </div>
+      <ul class="notes" id="notesList">
+        <li>操作前请先完全退出游戏，运行中修改会被覆盖</li>
+        <li>解锁后请勿再动游戏内画面 / 帧率设置，否则会重置回 60</li>
+        <li>游戏设置界面显示 30/60 是正常现象，以帧率小窗为准</li>
+        <li>想还原官方默认：随时点「恢复 60 FPS」</li>
+        <li>备份保存在 %LOCALAPPDATA%\star-rail-120fps\</li>
+      </ul>
+    </div>
+
+    <div class="foot">v1.0 · MIT License · 状态实时读取注册表</div>
+  </div>
+</div>
+
+<script>
+  // language pills
+  document.querySelectorAll('.langs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.langs button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  // segmented controls: exactly one active per group
+  document.querySelectorAll('.seg').forEach(g => {
+    g.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        g.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+      });
+    });
+  });
+
+  // overlay launch <-> close
+  const ovBtn = document.getElementById('ovToggle');
+  ovBtn.addEventListener('click', () => {
+    const running = ovBtn.classList.toggle('danger');
+    ovBtn.textContent = running ? '关闭小窗 ✕' : '启动小窗 →';
+  });
+
+  // notes disclosure
+  const nt = document.getElementById('notesToggle');
+  const nl = document.getElementById('notesList');
+  nt.addEventListener('click', () => {
+    nt.classList.toggle('open');
+    nl.classList.toggle('open');
+  });
+</script>
+</body>
+</html>

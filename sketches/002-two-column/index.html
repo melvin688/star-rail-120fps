@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方案 B · 双列宽屏</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    background: #1b1b1e;
+    color: #e6e6e6;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  .win {
+    width: 780px;
+    background: #0d0d0f;
+    border: 1px solid #2a2a2d;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  .titlebar {
+    height: 34px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 4px 0 12px;
+    background: #131315;
+    border-bottom: 1px solid #232326;
+  }
+  .titlebar span { font-size: 12px; color: #b9b9bd; }
+  .tb-btns { display: flex; }
+  .tb-btns i {
+    display: grid; place-items: center;
+    width: 40px; height: 30px;
+    font-style: normal; font-size: 12px; color: #9a9a9e;
+  }
+  .tb-btns i:hover { background: #26262a; color: #fff; }
+  .tb-btns i:last-child:hover { background: #c0392b; }
+
+  .body { padding: 18px; }
+
+  /* header spans both columns */
+  .head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .head h1 { font-size: 17px; font-weight: 600; }
+  .head p { font-size: 11.5px; color: #7d7d82; margin-top: 5px; }
+  .langs { display: flex; flex: none; margin-top: 1px; }
+  .langs button {
+    font: inherit; font-size: 11px; padding: 4px 9px;
+    background: transparent; color: #7d7d82; border: 1px solid #2c2c30; cursor: pointer;
+  }
+  .langs button:first-child { border-radius: 4px 0 0 4px; }
+  .langs button:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
+  .langs button.on { color: #3ddc84; border-color: #2f6b4a; background: #10231a; }
+
+  /* ---- two columns ---- */
+  .cols { display: grid; grid-template-columns: 320px 1fr; gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+
+  .card {
+    background: #131316;
+    border: 1px solid #232327;
+    border-radius: 7px;
+    padding: 16px;
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .card-head h2, .card > h2 { font-size: 12px; font-weight: 600; color: #b9b9bd; letter-spacing: .3px; }
+
+  /* the same row grid in both columns */
+  .row {
+    display: grid;
+    grid-template-columns: 78px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+  }
+  .row + .row { margin-top: 8px; }
+  .row .k { font-size: 11.5px; color: #83838a; }
+  .row .v { font-size: 11.5px; color: #e6e6e6; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- big status block: this column's anchor ---- */
+  .hero { text-align: left; padding: 4px 0 2px; }
+  .hero .top { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; flex: none; }
+  .hero .label { font-size: 11.5px; color: #83838a; letter-spacing: .3px; }
+  .hero .num {
+    display: flex; align-items: baseline; gap: 6px;
+    margin: 10px 0 2px;
+  }
+  .hero .num b {
+    font-size: 52px; line-height: 1; font-weight: 650;
+    color: #3ddc84; letter-spacing: -1.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero .num span { font-size: 13px; color: #83838a; letter-spacing: .5px; }
+
+  .facts { margin-top: 12px; border-top: 1px solid #232327; padding-top: 12px; }
+  .facts div {
+    display: flex; justify-content: space-between;
+    font-size: 11.5px; line-height: 1.9;
+  }
+  .facts dt { color: #7d7d82; }
+  .facts dd { color: #d4d4d8; }
+
+  /* ---- primary actions stacked full width ---- */
+  .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .btn {
+    font: inherit; font-size: 12.5px; font-weight: 600;
+    height: 40px; border-radius: 5px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: filter .12s;
+  }
+  .btn:active { filter: brightness(.9); }
+  .btn-primary { background: #3ddc84; color: #06120c; }
+  .btn-primary:hover { background: #4ee894; }
+  .btn-ghost { background: #17171a; color: #b9b9bd; border-color: #2c2c30; }
+  .btn-ghost:hover { background: #1e1e22; color: #e6e6e6; }
+
+  .seg { display: flex; }
+  .seg button {
+    font: inherit; font-size: 11px; height: 25px;
+    padding: 0 9px; min-width: 46px;
+    background: #17171a; color: #8a8a90;
+    border: 1px solid #2c2c30; cursor: pointer;
+  }
+  .seg button + button { border-left: 0; }
+  .seg button:first-child { border-radius: 4px 0 0 4px; }
+  .seg button:last-child { border-radius: 0 4px 4px 0; }
+  .seg button.on { background: #12301f; color: #3ddc84; border-color: #2f6b4a; }
+  .seg.fill { width: 100%; }
+  .seg.fill button { flex: 1; }
+
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .track { position: relative; flex: 1; height: 4px; background: #2c2c30; border-radius: 2px; }
+  .track i { position: absolute; inset: 0 12% 0 0; background: #3ddc84; border-radius: 2px; }
+  .track b {
+    position: absolute; left: 88%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    background: #e8e8e8; border-radius: 50%;
+  }
+
+  .link {
+    font: inherit; font-size: 11.5px;
+    background: none; border: 0; cursor: pointer;
+    color: #3ddc84;
+  }
+  .link:hover { text-decoration: underline; }
+  .link.danger { color: #d97a72; }
+
+  .preview {
+    font-size: 10.5px; color: #6e6e74; margin-top: 12px;
+    padding-top: 10px; border-top: 1px dashed #232327;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .notes { margin-top: 12px; }
+  .notes li {
+    list-style: none; position: relative;
+    font-size: 11px; line-height: 1.8; color: #7d7d82; padding-left: 10px;
+  }
+  .notes li::before { content: "·"; position: absolute; left: 0; color: #4a4a50; }
+
+  .foot { font-size: 10.5px; color: #55555b; text-align: center; padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <span>星穹铁道 120 帧工具</span>
+    <div class="tb-btns"><i>—</i><i>▢</i><i>✕</i></div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div>
+        <h1>星穹铁道 120 帧工具</h1>
+        <p>解锁官方隐藏的 120 FPS 档位 · 只修改游戏自己的设置值</p>
+      </div>
+      <div class="langs"><button class="on">中文</button><button>EN</button></div>
+    </div>
+
+    <div class="cols">
+      <!-- LEFT: status is the hero, actions sit right under it -->
+      <div class="col">
+        <div class="card">
+          <div class="hero">
+            <div class="top"><span class="label">已解锁</span></div>
+            <div class="num"><b id="fps">120</b><span>FPS</span></div>
+          </div>
+
+          <dl class="facts">
+            <div><dt>客户端</dt><dd>国际服</dd></div>
+            <div><dt>显示器</dt><dd>144 Hz</dd></div>
+            <div><dt>游戏</dt><dd style="color:#e2b33c">未运行</dd></div>
+            <div><dt>备份</dt><dd style="color:#3ddc84">可还原</dd></div>
+          </dl>
+
+          <div class="row" style="margin-top:14px;grid-template-columns:66px 1fr;">
+            <span class="k">目标帧率</span>
+            <div class="seg fill">
+              <button class="on">120</button>
+              <button>跟随屏幕</button>
+            </div>
+            <span class="v"></span>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary">开启 120 FPS</button>
+            <button class="btn btn-ghost">恢复 60 FPS</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: overlay config, then notes -->
+      <div class="col">
+        <div class="card">
+          <div class="card-head">
+            <h2>帧率小窗</h2>
+            <button class="link" id="ovToggle">启动小窗 →</button>
+          </div>
+
+          <div class="row">
+            <span class="k">不透明度</span>
+            <div class="slider"><div class="track"><i></i><b></b></div></div>
+            <span class="v">88%</span>
+          </div>
+          <div class="row">
+            <span class="k">尺寸</span>
+            <div class="seg fill"><button>小</button><button class="on">中</button><button>大</button></div>
+            <span class="v"></span>
+          </div>
+          <div class="row">
+            <span class="k">位置</span>
+            <div class="seg fill"><button class="on">右上</button><button>左上</button><button>右下</button></div>
+            <span class="v"></span>
+          </div>
+          <div class="row">
+            <span class="k">自动启动</span>
+            <div><button class="mini on">已开启</button></div>
+            <span class="v"></span>
+          </div>
+
+          <div class="preview">预览 210 × 84 · 88% 不透明 · 右上</div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:12px">注意事项</h2>
+          <ul class="notes" style="margin-top:0">
+            <li>操作前请先完全退出游戏，运行中修改会被覆盖</li>
+            <li>解锁后请勿再动游戏内画面 / 帧率设置</li>
+            <li>游戏设置界面显示 30/60 是正常现象</li>
+            <li>备份保存在 %LOCALAPPDATA%\star-rail-120fps\</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">v1.0 · MIT License · 状态实时读取注册表</div>
+  </div>
+</div>
+
+<style>
+  .mini {
+    font: inherit; font-size: 11px; height: 25px; padding: 0 11px;
+    background: #17171a; color: #8a8a90; border: 1px solid #2c2c30;
+    border-radius: 4px; cursor: pointer;
+  }
+  .mini.on { background: #12301f; color: #3ddc84; border-color: #2f6b4a; }
+</style>
+
+<script>
+  document.querySelectorAll('.langs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.langs button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  document.querySelectorAll('.seg').forEach(g => {
+    g.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        g.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        if (g.closest('.row') && g.closest('.row').querySelector('.k').textContent === '目标帧率') {
+          document.getElementById('fps').textContent = b.textContent.trim() === '120' ? '120' : '120';
+        }
+      });
+    });
+  });
+
+  const mini = document.querySelector('.mini');
+  mini.addEventListener('click', () => {
+    mini.classList.toggle('on');
+    mini.textContent = mini.classList.contains('on') ? '已开启' : '已关闭';
+  });
+
+  const ovBtn = document.getElementById('ovToggle');
+  ovBtn.addEventListener('click', () => {
+    const running = ovBtn.classList.toggle('danger');
+    ovBtn.textContent = running ? '关闭小窗 ✕' : '启动小窗 →';
+  });
+</script>
+</body>
+</html>

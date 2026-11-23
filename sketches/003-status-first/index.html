@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方案 C · 状态优先</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    background: #1b1b1e;
+    color: #e6e6e6;
+    -webkit-font-smoothing: antialiased;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px;
+  }
+
+  .win {
+    width: 460px;
+    background: #0d0d0f;
+    border: 1px solid #2a2a2d;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  .titlebar {
+    height: 34px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 4px 0 12px; background: #131315; border-bottom: 1px solid #232326;
+  }
+  .titlebar span { font-size: 12px; color: #b9b9bd; }
+  .tb-btns { display: flex; }
+  .tb-btns i {
+    display: grid; place-items: center; width: 40px; height: 30px;
+    font-style: normal; font-size: 12px; color: #9a9a9e;
+  }
+  .tb-btns i:hover { background: #26262a; color: #fff; }
+  .tb-btns i:last-child:hover { background: #c0392b; }
+
+  .body { padding: 0 0 14px; }
+
+  /* ---- top bar: title + language, no subtitle noise ---- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 0;
+  }
+  .topbar h1 { font-size: 12px; font-weight: 600; color: #83838a; letter-spacing: .6px; }
+  .langs { display: flex; }
+  .langs button {
+    font: inherit; font-size: 10.5px; padding: 3px 8px;
+    background: transparent; color: #6e6e74; border: 1px solid #26262a; cursor: pointer;
+  }
+  .langs button:first-child { border-radius: 3px 0 0 3px; }
+  .langs button:last-child { border-radius: 0 3px 3px 0; border-left: 0; }
+  .langs button.on { color: #3ddc84; border-color: #2f6b4a; }
+
+  /* ---- the hero: one number, nothing competing with it ---- */
+  .hero { padding: 26px 20px 22px; text-align: center; }
+  .hero .state { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 16px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; }
+  .hero .state span { font-size: 11.5px; color: #3ddc84; letter-spacing: .4px; }
+  .hero .num {
+    display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  }
+  .hero .num b {
+    font-size: 76px; line-height: .92; font-weight: 650;
+    color: #3ddc84; letter-spacing: -3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero .num i { font-size: 14px; font-style: normal; color: #6e6e74; letter-spacing: 1px; }
+  .hero .sub { font-size: 11.5px; color: #6e6e74; margin-top: 14px; line-height: 1.7; }
+  .hero .sub b { color: #b9b9bd; font-weight: 500; }
+
+  /* ---- actions: full width, unmistakable ---- */
+  .actions { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+  .btn {
+    font: inherit; font-size: 13px; font-weight: 600;
+    height: 42px; border-radius: 5px; cursor: pointer;
+    border: 1px solid transparent; transition: filter .12s;
+  }
+  .btn:active { filter: brightness(.9); }
+  .btn-primary { background: #3ddc84; color: #06120c; }
+  .btn-primary:hover { background: #4ee894; }
+  .btn-ghost { background: transparent; color: #83838a; border-color: #2c2c30; }
+  .btn-ghost:hover { background: #17171a; color: #d4d4d8; }
+
+  /* ---- everything else is a disclosure ---- */
+  .sect { margin-top: 18px; border-top: 1px solid #1c1c1f; }
+  .sect-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 20px; cursor: pointer; user-select: none;
+  }
+  .sect-head:hover { background: #111114; }
+  .sect-head .t { font-size: 12px; color: #b9b9bd; }
+  .sect-head .t small { font-size: 11px; color: #6e6e74; margin-left: 7px; }
+  .sect-head .chev {
+    font-size: 13px; color: #9a9a9e; line-height: 1;
+    width: 22px; height: 22px; display: grid; place-items: center;
+    border-radius: 4px; transition: transform .16s, background .12s, color .12s;
+  }
+  .sect-head:hover .chev { background: #26262a; color: #e6e6e6; }
+  .sect.open .sect-head .chev { color: #3ddc84; }
+  .sect.open .sect-head .chev { transform: rotate(90deg); }
+
+  .sect-body { display: none; padding: 2px 20px 16px; }
+  .sect.open .sect-body { display: block; }
+
+  .row {
+    display: grid; grid-template-columns: 74px 1fr auto;
+    align-items: center; gap: 10px; min-height: 28px;
+  }
+  .row + .row { margin-top: 7px; }
+  .row .k { font-size: 11.5px; color: #83838a; }
+  .row .v { font-size: 11.5px; color: #e6e6e6; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .seg { display: flex; width: 100%; }
+  .seg button {
+    flex: 1; font: inherit; font-size: 11px; height: 26px;
+    background: #17171a; color: #8a8a90; border: 1px solid #2c2c30; cursor: pointer;
+  }
+  .seg button + button { border-left: 0; }
+  .seg button:first-child { border-radius: 4px 0 0 4px; }
+  .seg button:last-child { border-radius: 0 4px 4px 0; }
+  .seg button.on { background: #12301f; color: #3ddc84; border-color: #2f6b4a; }
+
+  .slider { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .track { position: relative; flex: 1; height: 4px; background: #2c2c30; border-radius: 2px; }
+  .track i { position: absolute; inset: 0 12% 0 0; background: #3ddc84; border-radius: 2px; }
+  .track b {
+    position: absolute; left: 88%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    background: #e8e8e8; border-radius: 50%;
+  }
+
+  .mini {
+    font: inherit; font-size: 11px; height: 26px; padding: 0 12px;
+    background: #17171a; color: #8a8a90; border: 1px solid #2c2c30;
+    border-radius: 4px; cursor: pointer;
+  }
+  .mini.on { background: #12301f; color: #3ddc84; border-color: #2f6b4a; }
+
+  .link {
+    font: inherit; font-size: 11.5px; background: none; border: 0;
+    color: #3ddc84; cursor: pointer;
+  }
+  .link:hover { text-decoration: underline; }
+  .link.danger { color: #d97a72; }
+
+  .preview {
+    font-size: 10.5px; color: #6e6e74; margin-top: 12px;
+    padding-top: 10px; border-top: 1px dashed #232327;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .notes li {
+    list-style: none; position: relative;
+    font-size: 11px; line-height: 1.85; color: #7d7d82; padding-left: 10px;
+  }
+  .notes li::before { content: "·"; position: absolute; left: 0; color: #4a4a50; }
+
+  .foot {
+    font-size: 10px; color: #4a4a50; text-align: center;
+    padding: 12px 20px 0;
+  }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <span>星穹铁道 120 帧工具</span>
+    <div class="tb-btns"><i>—</i><i>▢</i><i>✕</i></div>
+  </div>
+
+  <div class="body">
+    <div class="topbar">
+      <h1>星穹铁道</h1>
+      <div class="langs"><button class="on">中文</button><button>EN</button></div>
+    </div>
+
+    <div class="hero">
+      <div class="state"><span class="dot"></span><span>已解锁</span></div>
+      <div class="num"><b id="fps">120</b><i>FPS</i></div>
+      <div class="sub">
+        国际服 · 显示器 144 Hz<br>
+        游戏未运行 · 原值已备份 <b>可还原</b>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary">开启 120 FPS</button>
+      <button class="btn btn-ghost">恢复 60 FPS</button>
+    </div>
+
+    <!-- overlay: one line, opens to the full controls -->
+    <div class="sect" id="sectOverlay">
+      <div class="sect-head">
+        <span class="t">帧率小窗 <small>· 中 · 88% · 右上</small></span>
+        <div style="display:flex;align-items:center;gap:14px">
+          <button class="link" id="ovToggle">启动 →</button>
+          <span class="chev">▸</span>
+        </div>
+      </div>
+      <div class="sect-body">
+        <div class="row">
+          <span class="k">不透明度</span>
+          <div class="slider"><div class="track"><i></i><b></b></div></div>
+          <span class="v">88%</span>
+        </div>
+        <div class="row">
+          <span class="k">尺寸</span>
+          <div class="seg"><button>小</button><button class="on">中</button><button>大</button></div>
+          <span class="v"></span>
+        </div>
+        <div class="row">
+          <span class="k">位置</span>
+          <div class="seg"><button class="on">右上</button><button>左上</button><button>右下</button></div>
+          <span class="v"></span>
+        </div>
+        <div class="row">
+          <span class="k">自动启动</span>
+          <div><button class="mini on">已开启</button></div>
+          <span class="v"></span>
+        </div>
+        <div class="preview">预览 210 × 84 · 88% 不透明 · 右上</div>
+      </div>
+    </div>
+
+    <div class="sect" id="sectAdvanced">
+      <div class="sect-head">
+        <span class="t">高级 <small>· 目标帧率</small></span>
+        <span class="chev">▸</span>
+      </div>
+      <div class="sect-body">
+        <div class="row">
+          <span class="k">目标帧率</span>
+          <div class="seg"><button class="on">120</button><button>跟随屏幕 · 120</button></div>
+          <span class="v"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sect" id="sectNotes">
+      <div class="sect-head">
+        <span class="t">注意事项</span>
+        <span class="chev">▸</span>
+      </div>
+      <div class="sect-body">
+        <ul class="notes">
+          <li>操作前请先完全退出游戏，运行中修改会被覆盖</li>
+          <li>解锁后请勿再动游戏内画面 / 帧率设置，否则会重置回 60</li>
+          <li>游戏设置界面显示 30/60 是正常现象，以帧率小窗为准</li>
+          <li>想还原官方默认：随时点「恢复 60 FPS」</li>
+          <li>备份保存在 %LOCALAPPDATA%\star-rail-120fps\</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="foot">v1.0 · MIT License</div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.langs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.langs button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  document.querySelectorAll('.sect-head').forEach(h => {
+    h.addEventListener('click', e => {
+      if (e.target.closest('.link')) return;   // the launch link is its own button
+      h.parentElement.classList.toggle('open');
+    });
+  });
+
+  document.querySelectorAll('.seg').forEach(g => {
+    g.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', e => {
+        e.stopPropagation();
+        g.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+      });
+    });
+  });
+
+  const mini = document.querySelector('.mini');
+  mini.addEventListener('click', e => {
+    e.stopPropagation();
+    mini.classList.toggle('on');
+    mini.textContent = mini.classList.contains('on') ? '已开启' : '已关闭';
+  });
+
+  const ovBtn = document.getElementById('ovToggle');
+  ovBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const running = ovBtn.classList.toggle('danger');
+    ovBtn.textContent = running ? '关闭 ✕' : '启动 →';
+  });
+</script>
+</body>
+</html>
