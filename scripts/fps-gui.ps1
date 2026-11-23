@@ -104,6 +104,21 @@ $script:L.zh = @{
     clientGlobal = '国际服'
     clientCN   = '国服'
     clientBoth = '国际服 · 国服'
+    heroUnlocked = '已解锁'
+    heroDefault  = '官方默认'
+    heroMismatch = '需同步'
+    heroUnknown  = '当前上限'
+    heroNone     = '未检测到设置'
+    factClient = '客户端'
+    factHz     = '显示器'
+    factGame   = '游戏'
+    factBackup = '备份'
+    valGameOn    = '运行中'
+    valGameOff   = '未运行'
+    valBackupOk  = '可还原'
+    valBackupNo  = '无备份'
+    valHz        = '{0} Hz'
+    valClientNA  = '未检测到'
     gameOn     = '游戏正在运行 · 请先完全退出再操作'
     gameOff    = '游戏未运行 · 显示器 {0} Hz'
     hzUnknown  = '游戏未运行 · 显示器 -- Hz'
@@ -157,6 +172,21 @@ $script:L.en = @{
     clientGlobal = 'Global'
     clientCN   = 'China'
     clientBoth = 'Global · China'
+    heroUnlocked = 'Unlocked'
+    heroDefault  = 'Official default'
+    heroMismatch = 'Out of sync'
+    heroUnknown  = 'Current cap'
+    heroNone     = 'No settings found'
+    factClient = 'Client'
+    factHz     = 'Display'
+    factGame   = 'Game'
+    factBackup = 'Backup'
+    valGameOn    = 'Running'
+    valGameOff   = 'Not running'
+    valBackupOk  = 'Restorable'
+    valBackupNo  = 'None'
+    valHz        = '{0} Hz'
+    valClientNA  = 'Not found'
     gameOn     = 'Game is running - exit it before unlock/restore'
     gameOff    = 'Game not running - display {0} Hz'
     hzUnknown  = 'Game not running - display -- Hz'
@@ -177,7 +207,7 @@ $script:L.en = @{
     size       = 'Size'
     position   = 'Position'
     szS        = 'Small'
-    szM        = 'Med'
+    szM        = 'Medium'
     szL        = 'Large'
     posTR      = 'Top-right'
     posTL      = 'Top-left'
@@ -454,6 +484,23 @@ function Style-Pill($btn, [bool]$on) {
 }
 
 # --- form + layout -------------------------------------------------------
+# Geometry follows the 002 two-column sketch: a wide left column holding the
+# status hero and both primary actions, and a right column stacking the overlay
+# settings above the notes. Column widths are design pixels, scaled by S().
+$colL    = 300    # left column: status + actions
+$colR    = 360    # right column: overlay settings + notes. Wider than the
+                  # sketch's 317 because the English "Bottom-right" needs an
+                  # 87px cell and a shared 66px label column.
+$padX    = 18
+$colGap  = 14
+$cardGap = 14
+$cardPad = 16
+$desWpx  = $padX * 2 + $colL + $colGap + $colR      # 687
+$ix      = $cardPad                                  # inner x inside a card
+$iwL     = $colL - ($cardPad * 2)                    # 268
+$iwR     = $colR - ($cardPad * 2)                    # 305
+$cardTop = 70
+
 $form = New-Object System.Windows.Forms.Form
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
 $form.MaximizeBox = $false
@@ -463,8 +510,8 @@ $form.ForeColor = $fg
 $form.Font = New-Object System.Drawing.Font($F, (FS 10))
 
 $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$desW = S 460
-$desH = S 732
+$desW = S $desWpx
+$desH = S 556
 # Keep the window inside the work area on BOTH axes; scroll instead of clipping.
 $maxW = $wa.Width - (S 60)
 $maxH = $wa.Height - (S 70)
@@ -476,88 +523,125 @@ $form.ClientSize = New-Object System.Drawing.Size($desW, $desH)
 $form.AutoScroll = $script:scrollMode
 
 # header
-$lblTitle = New-Lbl '' (S 24) (S 16) (S 300) (S 30) 16 $fg $true; $form.Controls.Add($lblTitle)
-$lblSub   = New-Lbl '' (S 24) (S 50) (S 412) (S 18) 8.5 $dim $false; $form.Controls.Add($lblSub)
-$btnZh = New-Pill (S 344) (S 20) (S 44) (S 26); $btnZh.Text = '中文'; $form.Controls.Add($btnZh)
-$btnEn = New-Pill (S 394) (S 20) (S 42) (S 26); $btnEn.Text = 'EN';   $form.Controls.Add($btnEn)
+$lblTitle = New-Lbl '' (S 22) (S 14) (S 320) (S 28) 16 $fg $true; $form.Controls.Add($lblTitle)
+$lblSub   = New-Lbl '' (S 22) (S 44) (S 460) (S 16) 8.5 $dim $false; $form.Controls.Add($lblSub)
+$btnZh = New-Pill (S ($desWpx - $padX - 94)) (S 16) (S 44) (S 26); $btnZh.Text = '中文'; $form.Controls.Add($btnZh)
+$btnEn = New-Pill (S ($desWpx - $padX - 46)) (S 16) (S 42) (S 26); $btnEn.Text = 'EN';   $form.Controls.Add($btnEn)
 
-# status card
+# --- left card: status hero, facts, tier, actions ------------------------
 $card1 = New-Object System.Windows.Forms.Panel
-$card1.Location = New-Object System.Drawing.Point((S 24), (S 86))
-$card1.Size = New-Object System.Drawing.Size((S 412), (S 130))
+$card1.Location = New-Object System.Drawing.Point((S $padX), (S $cardTop))
+$card1.Size = New-Object System.Drawing.Size((S $colL), (S 392))
 $card1.BackColor = $card
 $form.Controls.Add($card1)
 
-$lblDot    = New-Lbl '●' (S 20) (S 10) (S 16) (S 20) 9 $green $false; $card1.Controls.Add($lblDot)
-$lblState  = New-Lbl ''  (S 40) (S 6)  (S 356) (S 26) 13 $fg $true;   $card1.Controls.Add($lblState)
-$lblDetail = New-Lbl ''  (S 20) (S 42) (S 372) (S 18) 8.5 $dim $false; $card1.Controls.Add($lblDetail)
-$lblGame   = New-Lbl ''  (S 20) (S 62) (S 372) (S 18) 8.5 $dim $false; $card1.Controls.Add($lblGame)
+# the hero is a plain number: state in words goes on the small line above it,
+# because "120 / 60" at 30pt would not fit and reads ambiguously anyway
+$lblHeroLabel = New-Lbl '' (S $ix) (S 14) (S $iwL) (S 16) 8.5 $dim $false; $card1.Controls.Add($lblHeroLabel)
+$lblState     = New-Lbl '' (S $ix) (S 30) (S 150) (S 58) 30 $green $true;  $card1.Controls.Add($lblState)
+$lblStateUnit = New-Lbl '' (S ($ix + 112)) (S 56) (S 90) (S 22) 11 $dim $false; $card1.Controls.Add($lblStateUnit)
+
+# facts: label left, value right, one row each
+$factsY = 104
+$factsH = 22
+$factRows = @('Client', 'Hz', 'Game', 'Backup')
+$script:factK = @{}
+$script:factV = @{}
+for ($i = 0; $i -lt $factRows.Count; $i++) {
+    $y = $factsY + ($i * $factsH)
+    $k = New-Lbl '' (S $ix) (S $y) (S 70) (S 18) 8.5 $dim $false
+    $v = New-Lbl '' (S ($ix + 74)) (S $y) (S ($iwL - 74)) (S 18) 8.5 $fg $false
+    $v.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+    $card1.Controls.Add($k); $card1.Controls.Add($v)
+    $script:factK[$factRows[$i]] = $k
+    $script:factV[$factRows[$i]] = $v
+}
 
 # target frame-rate tier: only 30/60/120 exist in the client, so "follow the
 # display" means picking the highest tier the monitor can actually show.
-$lblTier      = New-Lbl '' (S 20) (S 98) (S 84) (S 20) 8.5 $dim $false; $card1.Controls.Add($lblTier)
-$pillTier120  = New-Pill (S 106) (S 94) (S 78) (S 26);  $card1.Controls.Add($pillTier120)
-$pillTierAuto = New-Pill (S 192) (S 94) (S 160) (S 26); $card1.Controls.Add($pillTierAuto)
+$tierY = 212
+$lblTier      = New-Lbl '' (S $ix) (S ($tierY + 4)) (S 66) (S 18) 8.5 $dim $false; $card1.Controls.Add($lblTier)
+$segW         = $iwL - 66
+$pillTier120  = New-Pill (S ($ix + 66)) (S $tierY) (S 60) (S 26);  $card1.Controls.Add($pillTier120)
+$pillTierAuto = New-Pill (S ($ix + 66 + 60)) (S $tierY) (S ($segW - 60)) (S 26); $card1.Controls.Add($pillTierAuto)
 
-# action buttons
-$btnOn  = New-FlatBtn '' (S 24) (S 230) (S 196) (S 44) 11 $true;  $form.Controls.Add($btnOn)
-$btnOff = New-FlatBtn '' (S 240) (S 230) (S 196) (S 44) 10.5 $false; $form.Controls.Add($btnOff)
+# action buttons: full width of the card, stacked
+$btnY = 270
+$btnOn  = New-FlatBtn '' (S $ix) (S $btnY) (S $iwL) (S 48) 11 $true;   $card1.Controls.Add($btnOn)
+$btnOff = New-FlatBtn '' (S $ix) (S ($btnY + 56)) (S $iwL) (S 48) 10.5 $false; $card1.Controls.Add($btnOff)
 $btnOn.BackColor = [System.Drawing.Color]::FromArgb(30, 48, 36)
 $btnOn.ForeColor = $green
 $btnOn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(60, 120, 80)
 $btnOn.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(38, 62, 46)
 $btnOn.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(24, 40, 30)
 
-# overlay settings card
+# --- right card 1: overlay settings --------------------------------------
+$colRx = $padX + $colL + $colGap
 $card2 = New-Object System.Windows.Forms.Panel
-$card2.Location = New-Object System.Drawing.Point((S 24), (S 294))
-$card2.Size = New-Object System.Drawing.Size((S 412), (S 226))
+$card2.Location = New-Object System.Drawing.Point((S $colRx), (S $cardTop))
+$card2.Size = New-Object System.Drawing.Size((S $colR), (S 237))
 $card2.BackColor = $card
 $form.Controls.Add($card2)
 
-$lblOvTitle = New-Lbl '' (S 18) (S 14) (S 200) (S 22) 11 $fg $true; $card2.Controls.Add($lblOvTitle)
-$btnOvLaunch = New-FlatBtn '' (S 250) (S 10) (S 144) (S 26) 9 $false
+$lblOvTitle = New-Lbl '' (S $ix) (S 14) (S 140) (S 22) 11 $fg $true; $card2.Controls.Add($lblOvTitle)
+$btnOvLaunch = New-FlatBtn '' (S ($ix + $iwR - 130)) (S 12) (S 130) (S 26) 9 $false
 $btnOvLaunch.BackColor = $card
 $btnOvLaunch.ForeColor = $green
 $btnOvLaunch.FlatAppearance.BorderColor = $card
 $btnOvLaunch.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(36, 36, 40)
 $card2.Controls.Add($btnOvLaunch)
 
-$lblOpacity    = New-Lbl '' (S 18) (S 48) (S 80) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblOpacity)
-$lblOpacityVal = New-Lbl '' (S 318) (S 46) (S 60) (S 18) 9 $fg $true;    $card2.Controls.Add($lblOpacityVal)
+# rows share one grid: 66px label, then whatever is left
+$rowKeyW = 66
+$rowValW = 42
+$rowCtlX = $ix + $rowKeyW
+$rowCtlW = $iwR - $rowKeyW - $rowValW
+
+$row1Y = 50
+$lblOpacity    = New-Lbl '' (S $ix) (S ($row1Y + 4)) (S $rowKeyW) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblOpacity)
+$lblOpacityVal = New-Lbl '' (S ($ix + $iwR - $rowValW)) (S ($row1Y + 2)) (S $rowValW) (S 18) 9 $fg $true
+$lblOpacityVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+$card2.Controls.Add($lblOpacityVal)
 
 $slider = New-Object System.Windows.Forms.Panel
-$slider.Location = New-Object System.Drawing.Point((S 96), (S 44))
-$slider.Size = New-Object System.Drawing.Size((S 216), (S 26))
+$slider.Location = New-Object System.Drawing.Point((S $rowCtlX), (S $row1Y))
+$slider.Size = New-Object System.Drawing.Size((S $rowCtlW), (S 26))
 $slider.BackColor = $card
 $card2.Controls.Add($slider)
 
-$lblSize = New-Lbl '' (S 18) (S 84) (S 80) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblSize)
-$pillS = New-Pill (S 96) (S 78) (S 56) (S 26); $card2.Controls.Add($pillS)
-$pillM = New-Pill (S 156) (S 78) (S 56) (S 26); $card2.Controls.Add($pillM)
-$pillL = New-Pill (S 216) (S 78) (S 56) (S 26); $card2.Controls.Add($pillL)
+$row2Y = 86
+$lblSize = New-Lbl '' (S $ix) (S ($row2Y + 4)) (S $rowKeyW) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblSize)
+$rowCtlWFull = $iwR - $rowKeyW          # no value column on these two rows
+$sw = [int]($rowCtlWFull / 3)
+$pillS = New-Pill (S $rowCtlX) (S $row2Y) (S $sw) (S 26); $card2.Controls.Add($pillS)
+$pillM = New-Pill (S ($rowCtlX + $sw)) (S $row2Y) (S $sw) (S 26); $card2.Controls.Add($pillM)
+$pillL = New-Pill (S ($rowCtlX + $sw * 2)) (S $row2Y) (S ($rowCtlWFull - $sw * 2)) (S 26); $card2.Controls.Add($pillL)
 
-$lblPos = New-Lbl '' (S 18) (S 120) (S 80) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblPos)
-$pillTR = New-Pill (S 96) (S 114) (S 92) (S 26); $card2.Controls.Add($pillTR)
-$pillTL = New-Pill (S 196) (S 114) (S 92) (S 26); $card2.Controls.Add($pillTL)
-$pillBR = New-Pill (S 296) (S 114) (S 92) (S 26); $card2.Controls.Add($pillBR)
+$row3Y = 122
+$lblPos = New-Lbl '' (S $ix) (S ($row3Y + 4)) (S $rowKeyW) (S 18) 8.5 $dim $false; $card2.Controls.Add($lblPos)
+$pillTR = New-Pill (S $rowCtlX) (S $row3Y) (S $sw) (S 26); $card2.Controls.Add($pillTR)
+$pillTL = New-Pill (S ($rowCtlX + $sw)) (S $row3Y) (S $sw) (S 26); $card2.Controls.Add($pillTL)
+$pillBR = New-Pill (S ($rowCtlX + $sw * 2)) (S $row3Y) (S ($rowCtlWFull - $sw * 2)) (S 26); $card2.Controls.Add($pillBR)
 
-$lblPreview = New-Lbl '' (S 18) (S 154) (S 372) (S 18) 8 $dim2 $false; $card2.Controls.Add($lblPreview)
+$lblPreview = New-Lbl '' (S $ix) (S 156) (S $iwR) (S 18) 8 $dim2 $false; $card2.Controls.Add($lblPreview)
 
-$lblAuto  = New-Lbl '' (S 18) (S 186) (S 150) (S 22) 8.5 $dim $false; $card2.Controls.Add($lblAuto)
-$pillAuto = New-Pill (S 284) (S 182) (S 110) (S 26); $card2.Controls.Add($pillAuto)
+$lblAuto  = New-Lbl '' (S $ix) (S 186) (S 150) (S 22) 8.5 $dim $false; $card2.Controls.Add($lblAuto)
+$pillAuto = New-Pill (S ($ix + $iwR - 76)) (S 184) (S 76) (S 26); $card2.Controls.Add($pillAuto)
 
-# notes card
+# --- right card 2: notes -------------------------------------------------
 $card3 = New-Object System.Windows.Forms.Panel
-$card3.Location = New-Object System.Drawing.Point((S 24), (S 536))
-$card3.Size = New-Object System.Drawing.Size((S 412), (S 164))
+$card3.Location = New-Object System.Drawing.Point((S $colRx), (S ($cardTop + 237 + $cardGap)))
+$card3.Size = New-Object System.Drawing.Size((S $colR), (S 141))
 $card3.BackColor = $card
 $form.Controls.Add($card3)
 
-$lblNotesTitle = New-Lbl '' (S 18) (S 12) (S 200) (S 22) 11 $fg $true; $card3.Controls.Add($lblNotesTitle)
-$lblNotes = New-Lbl '' (S 18) (S 40) (S 378) (S 114) 8.5 $dim $false; $card3.Controls.Add($lblNotes)
+$lblNotesTitle = New-Lbl '' (S $ix) (S 14) (S 200) (S 22) 11 $fg $true; $card3.Controls.Add($lblNotesTitle)
+$lblNotes = New-Lbl '' (S $ix) (S 42) (S $iwR) (S 88) 8.5 $dim $false; $card3.Controls.Add($lblNotes)
+$lblNotes.AutoSize = $false
 
-$lblFooter = New-Lbl '' (S 24) (S 708) (S 412) (S 18) 8 $dim2 $false; $form.Controls.Add($lblFooter)
+$lblFooter = New-Lbl '' (S $padX) (S 522) (S ($desWpx - $padX * 2)) (S 18) 8 $dim2 $false
+$lblFooter.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$form.Controls.Add($lblFooter)
 
 # --- slider painting -----------------------------------------------------
 $script:sliderDrag = $false
@@ -639,46 +723,80 @@ function Update-Pills {
     Style-Pill $pillTL ($script:posKey -eq 'topleft')
     Style-Pill $pillBR ($script:posKey -eq 'bottomright')
 }
+function Test-HasBackup {
+    # A backup exists if any client's original value was saved. The single
+    # backup.b64 written by older builds only counts for the Global client.
+    $dir = Join-Path $env:LOCALAPPDATA 'star-rail-120fps'
+    foreach ($f in @('backup-global.b64', 'backup-cn.b64', 'backup.b64')) {
+        if (Test-Path (Join-Path $dir $f)) { return $true }
+    }
+    return $false
+}
+
 function Refresh-Status {
     $L = $script:L[$script:lang]
     $info = Get-FpsInfo
     $run = Test-GameRunning
 
-    # When the clients disagree, show both numbers instead of a single one:
-    # taking the lowest made a machine with Global at 120 and China at 60 read
-    # as "official default 60", which hid the fact that one was already done.
+    # The hero shows a bare number with a small caption above it. A combined
+    # "120 / 60" in 30pt does not fit, and the client line below already
+    # carries the detail of which client sits at which cap.
     $caps = @($info.clients | Where-Object { $null -ne $_.fps } | ForEach-Object { $_.fps })
     $distinct = @($caps | Select-Object -Unique)
     if ($distinct.Count -gt 1) {
-        # name each client, so "120 / 60" cannot be read as "target vs default"
+        $lblHeroLabel.Text = $L.heroMismatch
+        $lblState.Text = [string](($caps | Measure-Object -Minimum).Minimum)
+        $lblState.ForeColor = $amber
+    } elseif ($info.fps -eq 120) {
+        $lblHeroLabel.Text = $L.heroUnlocked
+        $lblState.Text = '120'; $lblState.ForeColor = $green
+    } elseif ($info.fps -eq 60) {
+        $lblHeroLabel.Text = $L.heroDefault
+        $lblState.Text = '60'; $lblState.ForeColor = $fg
+    } elseif ($null -ne $info.fps) {
+        $lblHeroLabel.Text = $L.heroUnknown
+        $lblState.Text = [string]$info.fps; $lblState.ForeColor = $amber
+    } else {
+        $lblHeroLabel.Text = $L.heroNone
+        $lblState.Text = '--'; $lblState.ForeColor = $amber
+    }
+    $lblStateUnit.Text = if ($null -eq $info.fps) { '' } else { 'FPS' }
+
+    # Client fact: name both when both are installed, and show each cap when
+    # they disagree so nobody has to guess which one is still at 60.
+    if ($distinct.Count -gt 1) {
         $pairs = @($info.clients | Where-Object { $null -ne $_.fps } | ForEach-Object {
             $who = if ($_.key -eq 'cn') { $L.clientCN } else { $L.clientGlobal }
             $who + ' ' + $_.fps
         })
-        $lblState.Text = ($pairs -join '  ')
-        $lblState.ForeColor = $amber; $lblDot.ForeColor = $amber
-    } elseif ($info.fps -eq 120) {
-        $lblState.Text = $L.st120; $lblState.ForeColor = $green; $lblDot.ForeColor = $green
-    } elseif ($info.fps -eq 60) {
-        $lblState.Text = $L.st60; $lblState.ForeColor = $fg; $lblDot.ForeColor = $green
-    } elseif ($null -ne $info.fps) {
-        $lblState.Text = $L.stUnknown -f $info.fps; $lblState.ForeColor = $amber; $lblDot.ForeColor = $amber
+        $script:factV['Client'].Text = ($pairs -join ' · ')
+        $script:factV['Client'].ForeColor = $amber
+    } elseif ($info.client -eq 'both') {
+        $script:factV['Client'].Text = $L.clientBoth; $script:factV['Client'].ForeColor = $fg
+    } elseif ($info.client -eq 'global') {
+        $script:factV['Client'].Text = $L.clientGlobal; $script:factV['Client'].ForeColor = $fg
+    } elseif ($info.client -eq 'cn') {
+        $script:factV['Client'].Text = $L.clientCN; $script:factV['Client'].ForeColor = $fg
     } else {
-        $lblState.Text = $L.stNone; $lblState.ForeColor = $amber; $lblDot.ForeColor = $amber
+        $script:factV['Client'].Text = $L.valClientNA; $script:factV['Client'].ForeColor = $amber
     }
 
-    if ($info.client -eq 'both')       { $lblDetail.Text = $L.clientLine -f $L.clientBoth }
-    elseif ($info.client -eq 'global') { $lblDetail.Text = $L.clientLine -f $L.clientGlobal }
-    elseif ($info.client -eq 'cn')     { $lblDetail.Text = $L.clientLine -f $L.clientCN }
-    else                               { $lblDetail.Text = $L.clientNA }
+    $hz = Get-MaxHz
+    if ($hz -gt 0) { $script:factV['Hz'].Text = $L.valHz -f $hz } else { $script:factV['Hz'].Text = '--' }
+    $script:factV['Hz'].ForeColor = $dim
 
     if ($run) {
-        $lblGame.Text = $L.gameOn; $lblGame.ForeColor = $amber
+        $script:factV['Game'].Text = $L.valGameOn; $script:factV['Game'].ForeColor = $amber
     } else {
-        $hz = Get-MaxHz
-        if ($hz -gt 0) { $lblGame.Text = ($L.gameOff -f $hz) } else { $lblGame.Text = $L.hzUnknown }
-        $lblGame.ForeColor = $dim
+        $script:factV['Game'].Text = $L.valGameOff; $script:factV['Game'].ForeColor = $dim
     }
+
+    if (Test-HasBackup) {
+        $script:factV['Backup'].Text = $L.valBackupOk; $script:factV['Backup'].ForeColor = $green
+    } else {
+        $script:factV['Backup'].Text = $L.valBackupNo; $script:factV['Backup'].ForeColor = $dim
+    }
+
     try { Update-TierLabel } catch { }
 }
 function Apply-Language {
@@ -702,6 +820,10 @@ function Apply-Language {
     $lblNotesTitle.Text = $L.notesTitle
     $lblNotes.Text = ($L.notes -join "`n")
     $lblFooter.Text = $L.footer
+    $script:factK['Client'].Text = $L.factClient
+    $script:factK['Hz'].Text     = $L.factHz
+    $script:factK['Game'].Text   = $L.factGame
+    $script:factK['Backup'].Text = $L.factBackup
     $lblTier.Text = $L.tierTitle
     $pillTier120.Text = $L.tier120
     Update-TierLabel
