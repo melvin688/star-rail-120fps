@@ -260,6 +260,21 @@ function Sync-AutoStart {
 function Stop-Overlay {
     # Closing from the main window: the overlay itself also closes via
     # Ctrl+Alt+F or its right-click menu.
+    $stopped = $false
+    try {
+        $pidFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\overlay.pid'
+        if (Test-Path $pidFile) {
+            $ovPid = 0
+            if ([int]::TryParse((Get-Content $pidFile -Raw -ErrorAction Stop).Trim(), [ref]$ovPid)) {
+                Stop-Process -Id $ovPid -Force -ErrorAction SilentlyContinue
+                $stopped = $true
+            }
+            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+    if ($stopped) { return }
+    # Fallback for an overlay started before the PID file existed. This is the
+    # slow WMI path, so it only runs on an explicit click, never from the timer.
     try {
         Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop |
             Where-Object { $_.CommandLine -and $_.CommandLine -like '*fps-monitor.ps1*' } |
@@ -274,18 +289,24 @@ function Sync-OverlayButton {
         $btnOvLaunch.Text = $L.ovClose
         $btnOvLaunch.ForeColor = [System.Drawing.Color]::FromArgb(210, 120, 120)
     } else {
-        Sync-OverlayButton
+        $btnOvLaunch.Text = $L.ovLaunch
         $btnOvLaunch.ForeColor = $green
     }
 }
 
 function Test-OverlayRunning {
-    # A second PresentMon session would steal the first one's ETW session, so the
-    # launcher refuses to start a duplicate overlay.
+    # Hot path: called from the 2s UI timer, so it must never block. Reading one
+    # small file and doing a Get-Process lookup costs microseconds, whereas the
+    # Win32_Process WMI sweep it used to do froze the whole window.
     try {
-        $procs = Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop
-        foreach ($p in $procs) {
-            if ($p.CommandLine -and $p.CommandLine -like '*fps-monitor.ps1*') { return $true }
+        $pidFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\overlay.pid'
+        if (Test-Path $pidFile) {
+            $ovPid = 0
+            if ([int]::TryParse((Get-Content $pidFile -Raw -ErrorAction Stop).Trim(), [ref]$ovPid)) {
+                $p = Get-Process -Id $ovPid -ErrorAction SilentlyContinue
+                if ($p -and -not $p.HasExited) { return $true }
+            }
+            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
         }
     } catch { }
     return $false
@@ -643,7 +664,7 @@ function Apply-Language {
     $btnOn.Text = $L.btnOn
     $btnOff.Text = $L.btnOff
     $lblOvTitle.Text = $L.ovTitle
-    $btnOvLaunch.Text = $L.ovLaunch
+    Sync-OverlayButton
     $lblOpacity.Text = $L.opacity
     $lblSize.Text = $L.size
     $lblPos.Text = $L.position
@@ -705,7 +726,8 @@ $btnEn.Add_Click({ $script:lang = 'en'; Apply-Language })
 $btnOvLaunch.Add_Click({
     if (Test-OverlayRunning) { Stop-Overlay }
     elseif (Test-Path $script:monBat) { Start-Process -FilePath $script:monBat }
-    Start-Sleep -Milliseconds 400
+    # No Start-Sleep here: this runs on the UI thread, and the overlay needs a
+    # moment to write its PID file anyway. The 2s timer corrects the label.
     Sync-OverlayButton
 })
 $pillAuto.Add_Click({

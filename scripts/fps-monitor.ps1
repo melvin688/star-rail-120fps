@@ -76,6 +76,10 @@ $script:ovW       = 210
 $script:ovH       = 84
 $script:ovPos     = 'topright'
 $ovFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\overlay.json'
+# The launcher asks "is the overlay up?" every two seconds. Answering that with
+# a Win32_Process WMI sweep freezes the launcher's UI thread, so the overlay
+# advertises its PID here instead and the launcher only does a Get-Process.
+$script:pidFile = Join-Path $env:LOCALAPPDATA 'star-rail-120fps\overlay.pid'
 if (Test-Path $ovFile) {
     try {
         $o = Get-Content $ovFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -433,10 +437,12 @@ $script:hkTimer.Add_Tick({
 })
 
 # --- Run -----------------------------------------------------------------
+try { [System.IO.File]::WriteAllText($script:pidFile, [string]$PID) } catch { }
 $script:form.Add_FormClosed({
     try { $script:timer.Stop() } catch { }
     try { $script:hkTimer.Stop() } catch { }
     try { if (-not $script:proc.HasExited) { $script:proc.Kill() } } catch { }
+    try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
 })
 
 $script:timer.Start()
@@ -445,4 +451,5 @@ $script:hkTimer.Start()
 
 # window closed - make sure PresentMon is gone too
 try { if (-not $script:proc.HasExited) { $script:proc.Kill() } } catch { }
+try { Remove-Item $script:pidFile -Force -ErrorAction SilentlyContinue } catch { }
 exit 0
