@@ -14,6 +14,16 @@
 
 ## 快速开始
 
+### 新手：三步安装（推荐）
+
+1. 点右上角 `Code → Download ZIP`，**解压整个压缩包**到任意文件夹（`scripts`、`tools` 必须一起解压出来）
+2. 双击解压出来的 **`INSTALL.bat`** —— 会装到 `%LOCALAPPDATA%\StarRail120FPS`，并在**桌面**和**开始菜单**创建「星穹铁道 120帧」图标
+3. 双击桌面图标 → 点「开启 120 FPS」
+
+卸载：双击安装目录里的 `UNINSTALL.bat`（只删程序文件，不动你的游戏设置）。安装过程**不装服务、不写系统目录、不加开机自启**；唯一的 exe 是仓库自带的 Intel PresentMon（帧率小窗取数用）。
+
+### 不想安装：直接跑
+
 1. 下载本仓库（`Code → Download ZIP`，或 `git clone`）
 2. **先完全退出游戏**
 3. 双击 `StarRail-120FPS.bat`，打开图形界面

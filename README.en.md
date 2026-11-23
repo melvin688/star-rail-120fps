@@ -14,6 +14,16 @@ Honkai: Star Rail on PC hides its 120 FPS option: the in-game menu only offers 3
 
 ## Quick start
 
+### New here: three-step install (recommended)
+
+1. Click `Code → Download ZIP` and **extract the whole archive** somewhere (`scripts` and `tools` must come along)
+2. Double-click **`INSTALL.bat`** — it installs to `%LOCALAPPDATA%\StarRail120FPS` and creates a "星穹铁道 120帧" shortcut on your **desktop** and in the **Start menu**
+3. Open the shortcut and click "Unlock 120 FPS"
+
+To uninstall: run `UNINSTALL.bat` from the install folder (program files only, your game setting is left alone). The installer creates **no services, no system files, no auto-start entries**; the only exe is the bundled Intel PresentMon used by the FPS overlay.
+
+### No install: run it in place
+
 1. Download this repository (`Code → Download ZIP`, or `git clone`)
 2. **Fully close the game first**
 3. Double-click `StarRail-120FPS.bat` to open the GUI
