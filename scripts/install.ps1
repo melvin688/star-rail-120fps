@@ -26,9 +26,20 @@ if ($dest -ieq $src) {
     Write-Host "  installing to: $dest"
     if (Test-Path $dest) {
         Write-Host '  removing previous copy...'
-        try { Remove-Item $dest -Recurse -Force } catch { Write-Host "  warn: $($_.Exception.Message)" -ForegroundColor Yellow }
+        try { Remove-Item $dest -Recurse -Force -ErrorAction Stop }
+        catch {
+            # A running GUI/overlay keeps its files locked. Say so instead of
+            # failing later with a confusing "directory already exists".
+            Write-Host ''
+            Write-Host '  The previous copy is still in use - close the tool first:' -ForegroundColor Yellow
+            Write-Host '    * close the Star Rail 120 FPS window (or its tray icon)' -ForegroundColor Yellow
+            Write-Host '    * close the FPS overlay (Ctrl+Alt+F) if it is on screen' -ForegroundColor Yellow
+            Write-Host '  Then run INSTALL.bat again.' -ForegroundColor Yellow
+            Write-Host ''
+            exit 1
+        }
     }
-    New-Item -ItemType Directory -Path $dest | Out-Null
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
 
     # Copy every file in the repository root (bat / vbs / md / LICENSE ...),
     # then the script and tool folders. Listing files by hand used to mean a
