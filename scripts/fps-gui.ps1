@@ -103,6 +103,7 @@ $script:L.zh = @{
     clientNA   = '客户端：未检测到（运行过游戏后出现）'
     clientGlobal = '国际服'
     clientCN   = '国服'
+    clientBoth = '国际服 · 国服'
     gameOn     = '游戏正在运行 · 请先完全退出再操作'
     gameOff    = '游戏未运行 · 显示器 {0} Hz'
     hzUnknown  = '游戏未运行 · 显示器 -- Hz'
@@ -155,6 +156,7 @@ $script:L.en = @{
     clientNA   = 'Client: not detected (appears after you run the game once)'
     clientGlobal = 'Global'
     clientCN   = 'China'
+    clientBoth = 'Global · China'
     gameOn     = 'Game is running - exit it before unlock/restore'
     gameOff    = 'Game not running - display {0} Hz'
     hzUnknown  = 'Game not running - display -- Hz'
@@ -202,25 +204,34 @@ function Get-FpsInfo {
         @{ path = 'Software\Cognosphere\Star Rail';        key = 'global' },
         @{ path = 'Software\miHoYo\崩坏：星穹铁道';         key = 'cn' }
     )
+    # Collect every installed client instead of stopping at the first one; a
+    # machine can have both, and reporting only one would hide that the other
+    # is still capped. @() keeps a single result from unrolling to a scalar.
+    $found = @()
     foreach ($c in $candidates) {
         $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($c.path)
         if ($null -eq $k) { continue }
+        $cap = $null
         foreach ($v in $k.GetValueNames()) {
             if ($v -like 'GraphicsSettings_Model_h*') {
                 $b = $k.GetValue($v)
                 if ($null -eq $b) { continue }
                 $t = [System.Text.Encoding]::UTF8.GetString($b)
                 $m = [regex]::Match($t, '"FPS"\s*:\s*(\d+)')
-                if ($m.Success) { return @{ fps = [int]$m.Groups[1].Value; client = $c.key } }
+                if ($m.Success) { $cap = [int]$m.Groups[1].Value; break }
             }
         }
+        $found += @{ key = $c.key; fps = $cap }
     }
-    foreach ($c in $candidates) {
-        if ($null -ne [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($c.path)) {
-            return @{ fps = $null; client = $c.key }
-        }
-    }
-    return @{ fps = $null; client = $null }
+    if ($found.Count -eq 0) { return @{ fps = $null; client = $null; clients = @() } }
+
+    # Report the lowest cap across clients: the UI calls it unlocked only when
+    # every installed client really is.
+    $caps = @($found | Where-Object { $null -ne $_.fps } | ForEach-Object { $_.fps })
+    $worst = if ($caps.Count -gt 0) { ($caps | Measure-Object -Minimum).Minimum } else { $null }
+    $keys = @($found | ForEach-Object { $_.key })
+    $label = if ($keys.Count -gt 1) { 'both' } else { $keys[0] }
+    return @{ fps = $worst; client = $label; clients = $found }
 }
 function Test-GameRunning { return [bool](Get-Process StarRail -ErrorAction SilentlyContinue) }
 
@@ -633,7 +644,20 @@ function Refresh-Status {
     $info = Get-FpsInfo
     $run = Test-GameRunning
 
-    if ($info.fps -eq 120) {
+    # When the clients disagree, show both numbers instead of a single one:
+    # taking the lowest made a machine with Global at 120 and China at 60 read
+    # as "official default 60", which hid the fact that one was already done.
+    $caps = @($info.clients | Where-Object { $null -ne $_.fps } | ForEach-Object { $_.fps })
+    $distinct = @($caps | Select-Object -Unique)
+    if ($distinct.Count -gt 1) {
+        # name each client, so "120 / 60" cannot be read as "target vs default"
+        $pairs = @($info.clients | Where-Object { $null -ne $_.fps } | ForEach-Object {
+            $who = if ($_.key -eq 'cn') { $L.clientCN } else { $L.clientGlobal }
+            $who + ' ' + $_.fps
+        })
+        $lblState.Text = ($pairs -join '  ')
+        $lblState.ForeColor = $amber; $lblDot.ForeColor = $amber
+    } elseif ($info.fps -eq 120) {
         $lblState.Text = $L.st120; $lblState.ForeColor = $green; $lblDot.ForeColor = $green
     } elseif ($info.fps -eq 60) {
         $lblState.Text = $L.st60; $lblState.ForeColor = $fg; $lblDot.ForeColor = $green
@@ -643,9 +667,10 @@ function Refresh-Status {
         $lblState.Text = $L.stNone; $lblState.ForeColor = $amber; $lblDot.ForeColor = $amber
     }
 
-    if ($info.client -eq 'global') { $lblDetail.Text = $L.clientLine -f $L.clientGlobal }
-    elseif ($info.client -eq 'cn') { $lblDetail.Text = $L.clientLine -f $L.clientCN }
-    else                           { $lblDetail.Text = $L.clientNA }
+    if ($info.client -eq 'both')       { $lblDetail.Text = $L.clientLine -f $L.clientBoth }
+    elseif ($info.client -eq 'global') { $lblDetail.Text = $L.clientLine -f $L.clientGlobal }
+    elseif ($info.client -eq 'cn')     { $lblDetail.Text = $L.clientLine -f $L.clientCN }
+    else                               { $lblDetail.Text = $L.clientNA }
 
     if ($run) {
         $lblGame.Text = $L.gameOn; $lblGame.ForeColor = $amber

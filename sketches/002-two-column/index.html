@@ -102,11 +102,23 @@
 
   .facts { margin-top: 12px; border-top: 1px solid #232327; padding-top: 12px; }
   .facts div {
-    display: flex; justify-content: space-between;
+    display: flex; justify-content: space-between; align-items: center;
     font-size: 11.5px; line-height: 1.9;
   }
   .facts dt { color: #7d7d82; }
   .facts dd { color: #d4d4d8; }
+
+  /* marks a value as detected rather than chosen, so nobody hunts for a picker */
+  .auto {
+    font-size: 9px;
+    color: #6e6e74;
+    border: 1px solid #2e2e33;
+    border-radius: 3px;
+    padding: 0 4px;
+    margin-left: 6px;
+    letter-spacing: .4px;
+    vertical-align: 1px;
+  }
 
   /* ---- primary actions stacked full width ---- */
   .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
@@ -195,7 +207,7 @@
           </div>
 
           <dl class="facts">
-            <div><dt>客户端</dt><dd>国际服</dd></div>
+            <div><dt>客户端</dt><dd>国际服<span class="auto">自动识别</span></dd></div>
             <div><dt>显示器</dt><dd>144 Hz</dd></div>
             <div><dt>游戏</dt><dd style="color:#e2b33c">未运行</dd></div>
             <div><dt>备份</dt><dd style="color:#3ddc84">可还原</dd></div>

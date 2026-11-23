@@ -6,7 +6,7 @@ Honkai: Star Rail on PC hides its 120 FPS option: the in-game menu only offers 3
 
 - Pure PowerShell: no injection, no game file modifications, no anti-cheat interaction
 - Built-in GUI (switch between 中文 / English), live status, one-click unlock / restore
-- Works with the global client and the China client (auto-detected)
+- Works with the global client and the China client (auto-detected; if both are installed, both are handled)
 - Automatic backup + one-click restore to the official default (60)
 - Ships with a GPU-agnostic FPS counter window (NVIDIA / AMD / integrated graphics)
 
@@ -138,7 +138,7 @@ Takes effect **after you sign out and back in**; `FPS-MONITOR.bat` will no longe
 - How do I change the GUI language? → Click 中文 / EN at the top right, or start with `-Lang en`.
 - Does it need admin rights? → The unlock script does not (it only edits your own user registry setting). The FPS counter needs one elevation prompt (to read system frame events).
 - Is it bannable? → It does not inject, does not modify game files, and only edits a local display setting (same class as changing an in-game option). Use at your own risk and respect the game's terms.
-- Which clients are supported? → Global `HKCU\Software\Cognosphere\Star Rail`; China `HKCU\Software\miHoYo\崩坏：星穹铁道`. Both clients officially expose only 30/60.
+- Which clients are supported? → Global `HKCU\Software\Cognosphere\Star Rail`; China `HKCU\Software\miHoYo\崩坏：星穹铁道`. If both are installed, both are unlocked and each keeps its own backup. Both clients officially expose only 30/60.
 - My monitor isn't 120 Hz. → Still fine. The script warns you that gains are limited below 120 Hz (but it can still reduce stutter).
 - Will the window fit on a small screen? → It adapts. The window is capped to the desktop work area and the content switches to scrolling instead of being clipped (measured 480×602 client area on 1280×720).
 - After force-closing the overlay, a PresentMon process is still running. → Run `CLEANUP-PRESENTMON.bat` (asks for elevation only when something is actually left over). Closing the overlay normally (right-click → Exit) cleans up after itself; only killing it from Task Manager can leave a leftover.

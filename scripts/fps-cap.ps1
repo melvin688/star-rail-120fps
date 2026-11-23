@@ -45,7 +45,12 @@ param(
 
     # For self-tests only: override the registry key path
     # (e.g. 'Software\Cognosphere\Star Rail-SELFTEST').
-    [string]$KeyPath
+    [string]$KeyPath,
+
+    # For self-tests only: feed in several clients at once, so the multi-client
+    # path can be exercised without touching a real installation. Every entry
+    # must contain SELFTEST.
+    [string[]]$ClientKeysOverride
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,18 +128,46 @@ $ClientKeys = @(
     'Software\miHoYo\崩坏：星穹铁道'         # China client
 )
 
-function Find-SettingsValue {
+function Find-SettingsValues {
     param([string[]]$Candidates)
+    # Every installed client, not just the first one. A machine can legitimately
+    # have both the Global and the China client installed; taking only the first
+    # hit silently left the other one at 60.
+    $out = @()
     foreach ($k in $Candidates) {
         $psPath = 'HKCU:\' + $k
         if (-not (Test-Path -LiteralPath $psPath)) { continue }
         $item = Get-Item -LiteralPath $psPath
         $valueNames = @($item.GetValueNames() | Where-Object { $_ -like 'GraphicsSettings_Model_h*' })
         if ($valueNames.Count -gt 0) {
-            return [pscustomobject]@{ KeyPath = $k; ValueName = $valueNames[0] }
+            $out += [pscustomobject]@{ KeyPath = $k; ValueName = $valueNames[0] }
         }
     }
-    return $null
+    return $out
+}
+
+function Get-ClientTag([string]$keyPath) {
+    if ($keyPath -like '*miHoYo*') { return 'cn' }
+    return 'global'
+}
+
+function Get-BackupDir {
+    # Self-tests point this at a throwaway directory so they never overwrite a
+    # real backup. Everything else lands in %LOCALAPPDATA%\star-rail-120fps.
+    if ($env:STARRAIL_SELFTEST_DIR) { return $env:STARRAIL_SELFTEST_DIR }
+    return (Join-Path $env:LOCALAPPDATA 'star-rail-120fps')
+}
+
+function Get-BackupFile([string]$keyPath) {
+    $dir = Get-BackupDir
+    $tag = Get-ClientTag $keyPath
+    $perClient = Join-Path $dir ('backup-' + $tag + '.b64')
+    if (Test-Path -LiteralPath $perClient) { return $perClient }
+    # Older installs wrote a single backup.b64 while only ever touching the
+    # Global client, so that file is the Global client's original value.
+    $legacy = Join-Path $dir 'backup.b64'
+    if ($tag -eq 'global' -and (Test-Path -LiteralPath $legacy)) { return $legacy }
+    return $perClient
 }
 
 function Get-CurrentFps {
@@ -158,26 +191,46 @@ $candidates = if ($KeyPath) {
         exit 1
     }
     @($KeyPath)
+} elseif ($ClientKeysOverride) {
+    foreach ($k in $ClientKeysOverride) {
+        if ($k -notmatch 'SELFTEST') {
+            Write-Host '[x] -ClientKeysOverride is for self-tests only (every key must contain SELFTEST).' -ForegroundColor Red
+            exit 1
+        }
+    }
+    $ClientKeysOverride
 } else { $ClientKeys }
-$found = Find-SettingsValue -Candidates $candidates
-if (-not $found) {
+$found = @(Find-SettingsValues -Candidates $candidates)
+if ($found.Count -eq 0) {
     Write-Host '[x] Could not find the game settings in the registry.' -ForegroundColor Red
     Write-Host '    Run the game once (so it creates its settings), then try again.'
     exit 1
 }
 
-$fullPath = 'HKCU:\' + $found.KeyPath
-$key = Get-Item -LiteralPath $fullPath
-$raw = $key.GetValue($found.ValueName)
-$current = Get-CurrentFps -raw $raw
-
-Write-Host ('[i] Client      : ' + $found.KeyPath)
-Write-Host ('[i] Value       : ' + $found.ValueName)
-if ($current -lt 0) {
-    Write-Host '[x] The settings value does not contain an "FPS" field - not touching it.' -ForegroundColor Red
-    exit 1
+# Read every installed client up front, so status can report all of them and
+# the write loop can reuse the values it just read.
+$clients = @()
+foreach ($f in $found) {
+    $key = Get-Item -LiteralPath ('HKCU:\' + $f.KeyPath)
+    $raw = $key.GetValue($f.ValueName)
+    $cur = Get-CurrentFps -raw $raw
+    $tag = Get-ClientTag $f.KeyPath
+    $clients += [pscustomobject]@{
+        KeyPath   = $f.KeyPath
+        ValueName = $f.ValueName
+        Raw       = $raw
+        Current   = $cur
+        Tag       = $tag
+        Label     = $(if ($tag -eq 'cn') { 'China' } else { 'Global' })
+    }
+    Write-Host ('[i] Client      : ' + $f.KeyPath)
+    Write-Host ('[i] Value       : ' + $f.ValueName)
+    if ($cur -lt 0) {
+        Write-Host '[x] The settings value does not contain an "FPS" field - not touching it.' -ForegroundColor Red
+        exit 1
+    }
+    Write-Host ('[i] Current cap : ' + $cur + ' FPS')
 }
-Write-Host ('[i] Current cap : ' + $current + ' FPS')
 
 if ($Mode -eq 'status') { exit 0 }
 
@@ -211,44 +264,57 @@ if ($Mode -eq 'unlock') {
 if ($target -gt 120) { $target = 120 }   # hard ceiling: the client ignores anything above 120
 if ($tierNote) { Write-Host ('[i] ' + $tierNote) }
 
-if ($current -eq $target) {
-    Write-Host ('[=] Already at ' + $target + ' FPS - nothing to do.')
-    exit 0
-}
-
-# --- 3. Backup (first time only) ----------------------------------------
-$backupDir = Join-Path $env:LOCALAPPDATA 'star-rail-120fps'
+# --- 3-5. Back up, patch and verify every installed client --------------
+$backupDir = Get-BackupDir
 if (-not (Test-Path -LiteralPath $backupDir)) {
     New-Item -ItemType Directory -Path $backupDir | Out-Null
 }
-$backupFile = Join-Path $backupDir 'backup.b64'
-if (-not (Test-Path -LiteralPath $backupFile)) {
-    [Convert]::ToBase64String([byte[]]$raw) | Set-Content -LiteralPath $backupFile -Encoding Ascii
-    Write-Host ('[i] Original value backed up to ' + $backupFile)
+
+$changed = 0
+$alreadySet = 0
+$failed = 0
+foreach ($c in $clients) {
+    if ($c.Current -eq $target) {
+        Write-Host ('[=] ' + $c.Label + ': already at ' + $target + ' FPS - nothing to do.')
+        $alreadySet++
+        continue
+    }
+
+    $backupFile = Get-BackupFile $c.KeyPath
+    if (-not (Test-Path -LiteralPath $backupFile)) {
+        [Convert]::ToBase64String([byte[]]$c.Raw) | Set-Content -LiteralPath $backupFile -Encoding Ascii
+        Write-Host ('[i] ' + $c.Label + ': original value backed up to ' + $backupFile)
+    }
+
+    $text = [System.Text.Encoding]::UTF8.GetString($c.Raw)   # keeps the trailing NUL inside the string
+    $text = [regex]::Replace($text, '"FPS":\d+', '"FPS":' + $target)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+    try {
+        $writable = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($c.KeyPath, $true)
+        $writable.SetValue($c.ValueName, $bytes, [Microsoft.Win32.RegistryValueKind]::Binary)
+        $writable.Close()
+    } catch {
+        Write-Host ('[x] ' + $c.Label + ': could not write to the registry: ' + $_.Exception.Message) -ForegroundColor Red
+        $failed++
+        continue
+    }
+
+    $check = (Get-Item -LiteralPath ('HKCU:\' + $c.KeyPath)).GetValue($c.ValueName)
+    $now = Get-CurrentFps -raw $check
+    if ($now -ne $target) {
+        Write-Host ('[x] ' + $c.Label + ': write did not stick (still ' + $now + ') - nothing was broken, please try again.') -ForegroundColor Red
+        $failed++
+        continue
+    }
+    Write-Host ('[+] ' + $c.Label + ': FPS cap set to ' + $target + ' (verified).') -ForegroundColor Green
+    $changed++
 }
 
-# --- 4. Patch and write back --------------------------------------------
-$text = [System.Text.Encoding]::UTF8.GetString($raw)   # keeps the trailing NUL inside the string
-$text = [regex]::Replace($text, '"FPS":\d+', '"FPS":' + $target)
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
-try {
-    $writable = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($found.KeyPath, $true)
-    $writable.SetValue($found.ValueName, $bytes, [Microsoft.Win32.RegistryValueKind]::Binary)
-    $writable.Close()
-} catch {
-    Write-Host ('[x] Could not write to the registry: ' + $_.Exception.Message) -ForegroundColor Red
-    exit 1
-}
-
-# --- 5. Read back and verify --------------------------------------------
-$check = (Get-Item -LiteralPath $fullPath).GetValue($found.ValueName)
-$now = Get-CurrentFps -raw $check
-if ($now -ne $target) {
-    Write-Host ('[x] Write did not stick (still ' + $now + '). Nothing was broken - please try again.') -ForegroundColor Red
-    exit 1
-}
-Write-Host ('[+] FPS cap set to ' + $target + ' (verified).') -ForegroundColor Green
 Write-Host ''
+if ($clients.Count -gt 1) {
+    Write-Host ('[i] ' + $changed + ' client(s) changed, ' + $alreadySet + ' already at ' + $target + ', ' + $failed + ' failed.')
+}
+if ($failed -gt 0) { exit 1 }
 
 # --- 6. Post-unlock guidance --------------------------------------------
 if ($Mode -eq 'unlock') {
