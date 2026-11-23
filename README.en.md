@@ -20,7 +20,7 @@ Honkai: Star Rail on PC hides its 120 FPS option: the in-game menu only offers 3
 2. Double-click **`INSTALL.bat`** — it installs to `%LOCALAPPDATA%\StarRail120FPS` and creates a "星穹铁道 120帧" shortcut on your **desktop** and in the **Start menu**
 3. Open the shortcut and click "Unlock 120 FPS"
 
-To uninstall: run `UNINSTALL.bat` from the install folder (program files only, your game setting is left alone). The installer creates **no services, no system files, no auto-start entries**; the only exe is the bundled Intel PresentMon used by the FPS overlay.
+To uninstall: run `UNINSTALL.bat` from the install folder (program files only, your game setting is left alone). The installer creates **no services and no system files**; the only exe is the bundled Intel PresentMon used by the FPS overlay. Nothing runs in the background by default — only if you turn on **Start with the game** does it add one Startup entry, which you can switch off in the same place (and the uninstaller removes it).
 
 ### No install: run it in place
 
@@ -39,9 +39,20 @@ To go back to the official 60 FPS cap: close the game and click "Restore 60 FPS 
 ![screenshot](docs/screenshot-en.png)
 
 - Launch with `StarRail-120FPS.bat`; switch between 中文 / English at the top right, or start directly in English with `powershell -File scripts\fps-gui.ps1 -Lang en`
-- Live status read from the registry: current FPS cap, detected client (global / China), and a note that the original value is backed up
-- Warns "game is running — fully exit it first" so your change is not overwritten
+- Live status read from the registry: current FPS cap, detected client (global / China), a note that the original value is backed up, and your current display refresh rate
+- Warns "game is running — fully exit it first" so your change is not overwritten (the status refreshes every 2 seconds, so the warning clears when you close the game)
 - Bottom button launches the FPS overlay; usage notes are always visible
+
+### Start the overlay with the game
+
+The "FPS overlay" card has a **Start with the game** switch:
+
+- Turning it on places one shortcut in your **Startup folder** (pointing at `GAME-WATCH.vbs`); after login a ~50 MB watcher checks for the game process every 3 seconds
+- Game starts → the FPS overlay launches itself; game exits → the overlay closes itself
+- Turning the switch off deletes the Startup entry and stops the watcher immediately; `UNINSTALL.bat` cleans it up too
+- The overlay itself still asks for one administrator prompt (frame-event tracing); after that it does not ask again in the same session — see the Performance Log Users FAQ for a permanent exemption
+
+> This switch is off by default. "No auto-start entries" describes the default state — the tool never adds one behind your back.
 
 ## Verify the frame rate
 
@@ -112,7 +123,8 @@ The game stores its graphics settings in the current user's registry, under a bi
 
 ## Safety & rollback
 
-- Edits only your own user registry setting — equivalent to changing an in-game option. No system files, no services, nothing running in the background (if a `PresentMonSharedService` already exists on your system, it came from Intel's official installer and is unrelated to this tool)
+- Edits only your own user registry setting — equivalent to changing an in-game option. No system files, no services
+- Nothing runs in the background by default. Only if you turn on "Start with the game" does it create one Startup shortcut pointing at `GAME-WATCH.vbs` (a lightweight watcher runs after login); switching it off or uninstalling deletes it
 - The original value is backed up automatically; "Restore 60 FPS" (or `RESTORE-60FPS.bat`) returns to the official default
 - Not affiliated with the game's developer or publisher. Use at your own risk.
 

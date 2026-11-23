@@ -40,6 +40,55 @@ if ($script:S -lt 1) { $script:S = 1 }
 function S([double]$v)  { return [int][Math]::Round($v * $script:S) }
 function FS([double]$v) { return [single]($v * $script:S) }
 
+# --- Display refresh rate (EnumDisplaySettings, primary monitor) ---------
+# WMI reports one row per adapter and its numbers can disagree (iGPU vs dGPU),
+# so ask Windows for the primary display's actual mode instead.
+if (-not ('DispHz' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class DispHz {
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+    public struct DEVMODE {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmDeviceName;
+        public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public int dmFields;
+        public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+    [DllImport("user32.dll", CharSet=CharSet.Ansi)]
+    public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+    static DEVMODE Blank() {
+        DEVMODE d = new DEVMODE();
+        d.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+        return d;
+    }
+    public static int Current() {
+        DEVMODE d = Blank();
+        if (EnumDisplaySettings(null, -1, ref d)) return d.dmDisplayFrequency;
+        return 0;
+    }
+    // highest refresh rate available at the current resolution
+    public static int Max() {
+        DEVMODE cur = Blank();
+        if (!EnumDisplaySettings(null, -1, ref cur)) return 0;
+        int best = cur.dmDisplayFrequency;
+        for (int i = 0; i < 500; i++) {
+            DEVMODE d = Blank();
+            if (!EnumDisplaySettings(null, i, ref d)) break;
+            if (d.dmPelsWidth != cur.dmPelsWidth || d.dmPelsHeight != cur.dmPelsHeight) continue;
+            if (d.dmDisplayFrequency > best) best = d.dmDisplayFrequency;
+        }
+        return best;
+    }
+}
+'@
+}
+
 # --- string tables -------------------------------------------------------
 $script:L = @{}
 $script:L.zh = @{
@@ -54,12 +103,18 @@ $script:L.zh = @{
     clientNA   = '客户端：未检测到（运行过游戏后出现）'
     clientGlobal = '国际服'
     clientCN   = '国服'
-    gameOn     = '游戏正在运行：请先完全退出游戏，再点「开启/恢复」'
-    gameOff    = '游戏未运行 · 可以安全操作'
+    gameOn     = '游戏正在运行 · 请先完全退出再操作'
+    gameOff    = '游戏未运行 · 显示器 {0} Hz'
+    hzUnknown  = '游戏未运行 · 显示器 -- Hz'
     btnOn      = '开启 120 FPS'
     btnOff     = '恢复 60 FPS'
     ovTitle    = '帧率小窗'
     ovLaunch   = '启动小窗 →'
+    autoTitle  = '开游戏时自动启动'
+    autoOn     = '已开启'
+    autoOff    = '已关闭'
+    autoRunning = '守护进程运行中'
+    autoFail   = '无法创建启动项。请确认工具文件夹完整（含 GAME-WATCH.vbs），并且你没有禁用启动文件夹。'
     opacity    = '不透明度'
     size       = '尺寸'
     position   = '位置'
@@ -72,10 +127,11 @@ $script:L.zh = @{
     preview    = '预览 {0} × {1} · {2}% 不透明 · {3}'
     notesTitle = '注意事项'
     notes      = @(
-        '· 操作前请先完全退出游戏（游戏运行中修改会被覆盖）',
+        '· 操作前请先完全退出游戏（运行中修改会被覆盖）',
         '· 解锁后请勿再动游戏内画面/帧率设置，否则会重置回 60',
         '· 游戏设置界面显示 30/60 是正常现象，以帧率小窗为准',
         '· 想还原官方默认：随时点「恢复 60 FPS」',
+        '· 「开游戏时自动启动」会在启动文件夹放一个快捷方式，随时可关',
         '· 备份保存在本机 %LOCALAPPDATA%\star-rail-120fps\'
     )
     footer     = 'v1.0 · MIT License · 状态实时读取注册表'
@@ -93,12 +149,18 @@ $script:L.en = @{
     clientNA   = 'Client: not detected (appears after you run the game once)'
     clientGlobal = 'Global'
     clientCN   = 'China'
-    gameOn     = 'Game is running - fully exit it before unlock/restore'
-    gameOff    = 'Game not running - safe to proceed'
+    gameOn     = 'Game is running - exit it before unlock/restore'
+    gameOff    = 'Game not running - display {0} Hz'
+    hzUnknown  = 'Game not running - display -- Hz'
     btnOn      = 'Unlock 120 FPS'
     btnOff     = 'Restore 60 FPS'
     ovTitle    = 'FPS overlay'
     ovLaunch   = 'Launch →'
+    autoTitle  = 'Start with the game'
+    autoOn     = 'On'
+    autoOff    = 'Off'
+    autoRunning = 'Watcher running'
+    autoFail   = 'Could not create the startup entry. Make sure the tool folder is complete (GAME-WATCH.vbs present) and the Startup folder is not disabled.'
     opacity    = 'Opacity'
     size       = 'Size'
     position   = 'Position'
@@ -115,6 +177,7 @@ $script:L.en = @{
         '· Do not touch in-game graphics/FPS settings after unlocking',
         '· In-game menu still showing 30/60 is normal; trust the counter',
         '· Restore the official default anytime: "Restore 60 FPS"',
+        '· "Start with the game" adds a Startup shortcut, removable here',
         '· Backup kept in %LOCALAPPDATA%\star-rail-120fps\'
     )
     footer     = 'v1.0 · MIT License · live status from the registry'
@@ -153,6 +216,76 @@ function Test-GameRunning { return [bool](Get-Process StarRail -ErrorAction Sile
 $script:sliderVal = 90
 $script:sizeKey   = 'medium'
 $script:posKey    = 'topright'
+
+# auto-start ("start the overlay with the game") is backed by a real shortcut
+# in the Startup folder - the shortcut is the single source of truth, so if the
+# user deletes it by hand the GUI simply shows the option as off.
+$script:startupDir  = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+$script:startupLnk  = Join-Path $script:startupDir 'StarRail120FPS-Agent.lnk'
+$script:watchVbs    = Join-Path $script:root 'GAME-WATCH.vbs'
+$script:watchScript = Join-Path $script:root 'scripts\game-watch.ps1'
+$script:autoStart   = $false
+$script:hzRef       = -1
+
+function Get-MaxHz {
+    if ($script:hzRef -ge 0) { return $script:hzRef }
+    $hz = 0
+    try { $hz = [DispHz]::Max() } catch { }
+    if ($hz -le 0) {
+        try {
+            $hz = (Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop |
+                   Measure-Object -Property CurrentRefreshRate -Maximum).Maximum
+        } catch { }
+    }
+    $script:hzRef = [int]$hz
+    return $script:hzRef
+}
+function Sync-AutoStart {
+    $script:autoStart = Test-Path -LiteralPath $script:startupLnk
+}
+function Test-OverlayRunning {
+    # A second PresentMon session would steal the first one's ETW session, so the
+    # launcher refuses to start a duplicate overlay.
+    try {
+        $procs = Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop
+        foreach ($p in $procs) {
+            if ($p.CommandLine -and $p.CommandLine -like '*fps-monitor.ps1*') { return $true }
+        }
+    } catch { }
+    return $false
+}
+function Enable-AutoStart {
+    if (-not (Test-Path -LiteralPath $script:watchVbs)) { return $false }
+    if (-not (Test-Path -LiteralPath $script:startupDir)) { return $false }
+    try {
+        $ws = New-Object -ComObject WScript.Shell
+        $lnk = $ws.CreateShortcut($script:startupLnk)
+        $lnk.TargetPath       = 'wscript.exe'
+        $lnk.Arguments        = '"' + $script:watchVbs + '"'
+        $lnk.WorkingDirectory = $script:root
+        $lnk.Description      = 'Star Rail 120 FPS - FPS overlay watcher'
+        $lnk.WindowStyle      = 7
+        $icoPath = Join-Path $script:root 'docs\app.ico'
+        if (Test-Path -LiteralPath $icoPath) { $lnk.IconLocation = "$icoPath,0" }
+        $lnk.Save()
+        # start it right away so the user does not have to reboot
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + $script:watchVbs + '"') -WindowStyle Hidden
+        return $true
+    } catch { return $false }
+}
+function Disable-AutoStart {
+    try {
+        Remove-Item -LiteralPath $script:startupLnk -Force -ErrorAction SilentlyContinue
+        $stopScript = $script:watchScript
+        if (Test-Path -LiteralPath $stopScript) {
+            Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $stopScript + '" -Stop') `
+                -WindowStyle Hidden
+        }
+        return $true
+    } catch { return $false }
+}
+
 function Load-Overlay {
     if (-not (Test-Path $script:ovFile)) { return }
     try {
@@ -261,7 +394,7 @@ $form.Font = New-Object System.Drawing.Font($F, (FS 10))
 
 $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 $desW = S 460
-$desH = S 640
+$desH = S 700
 # Keep the window inside the work area on BOTH axes; scroll instead of clipping.
 $maxW = $wa.Width - (S 60)
 $maxH = $wa.Height - (S 70)
@@ -302,7 +435,7 @@ $btnOn.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(24, 
 # overlay settings card
 $card2 = New-Object System.Windows.Forms.Panel
 $card2.Location = New-Object System.Drawing.Point((S 24), (S 262))
-$card2.Size = New-Object System.Drawing.Size((S 412), (S 192))
+$card2.Size = New-Object System.Drawing.Size((S 412), (S 226))
 $card2.BackColor = $card
 $form.Controls.Add($card2)
 
@@ -335,17 +468,20 @@ $pillBR = New-Pill (S 296) (S 114) (S 92) (S 26); $card2.Controls.Add($pillBR)
 
 $lblPreview = New-Lbl '' (S 18) (S 154) (S 372) (S 18) 8 $dim2 $false; $card2.Controls.Add($lblPreview)
 
+$lblAuto  = New-Lbl '' (S 18) (S 186) (S 150) (S 22) 8.5 $dim $false; $card2.Controls.Add($lblAuto)
+$pillAuto = New-Pill (S 284) (S 182) (S 110) (S 26); $card2.Controls.Add($pillAuto)
+
 # notes card
 $card3 = New-Object System.Windows.Forms.Panel
-$card3.Location = New-Object System.Drawing.Point((S 24), (S 470))
-$card3.Size = New-Object System.Drawing.Size((S 412), (S 138))
+$card3.Location = New-Object System.Drawing.Point((S 24), (S 504))
+$card3.Size = New-Object System.Drawing.Size((S 412), (S 164))
 $card3.BackColor = $card
 $form.Controls.Add($card3)
 
 $lblNotesTitle = New-Lbl '' (S 18) (S 12) (S 200) (S 22) 11 $fg $true; $card3.Controls.Add($lblNotesTitle)
-$lblNotes = New-Lbl '' (S 18) (S 40) (S 378) (S 92) 8.5 $dim $false; $card3.Controls.Add($lblNotes)
+$lblNotes = New-Lbl '' (S 18) (S 40) (S 378) (S 114) 8.5 $dim $false; $card3.Controls.Add($lblNotes)
 
-$lblFooter = New-Lbl '' (S 24) (S 616) (S 412) (S 18) 8 $dim2 $false; $form.Controls.Add($lblFooter)
+$lblFooter = New-Lbl '' (S 24) (S 676) (S 412) (S 18) 8 $dim2 $false; $form.Controls.Add($lblFooter)
 
 # --- slider painting -----------------------------------------------------
 $script:sliderDrag = $false
@@ -433,7 +569,9 @@ function Refresh-Status {
     if ($run) {
         $lblGame.Text = $L.gameOn; $lblGame.ForeColor = $amber
     } else {
-        $lblGame.Text = $L.gameOff; $lblGame.ForeColor = $dim
+        $hz = Get-MaxHz
+        if ($hz -gt 0) { $lblGame.Text = ($L.gameOff -f $hz) } else { $lblGame.Text = $L.hzUnknown }
+        $lblGame.ForeColor = $dim
     }
 }
 function Apply-Language {
@@ -457,6 +595,10 @@ function Apply-Language {
     $lblNotesTitle.Text = $L.notesTitle
     $lblNotes.Text = ($L.notes -join "`n")
     $lblFooter.Text = $L.footer
+    $lblAuto.Text = $L.autoTitle
+    Sync-AutoStart
+    Style-Pill $pillAuto $script:autoStart
+    if ($script:autoStart) { $pillAuto.Text = $L.autoOn } else { $pillAuto.Text = $L.autoOff }
 
     if ($script:lang -eq 'zh') {
         Style-Pill $btnZh $true
@@ -495,7 +637,23 @@ $btnOff.Add_Click({ Invoke-Cap 'restore' })
 $btnZh.Add_Click({ $script:lang = 'zh'; Apply-Language })
 $btnEn.Add_Click({ $script:lang = 'en'; Apply-Language })
 $btnOvLaunch.Add_Click({
-    if (Test-Path $script:monBat) { Start-Process -FilePath $script:monBat }
+    if (-not (Test-Path $script:monBat)) { return }
+    if (Test-OverlayRunning) { return }          # avoid a second PresentMon stealing the ETW session
+    Start-Process -FilePath $script:monBat
+})
+$pillAuto.Add_Click({
+    $L = $script:L[$script:lang]
+    if ($script:autoStart) {
+        [void](Disable-AutoStart)
+    } else {
+        if (-not (Enable-AutoStart)) {
+            [System.Windows.Forms.MessageBox]::Show($L.autoFail, $L.errTitle, 'OK', 'Warning') | Out-Null
+            return
+        }
+    }
+    Sync-AutoStart
+    Style-Pill $pillAuto $script:autoStart
+    if ($script:autoStart) { $pillAuto.Text = $L.autoOn } else { $pillAuto.Text = $L.autoOff }
 })
 $pillS.Add_Click({ $script:sizeKey = 'small';   Update-Pills; Update-Preview; Save-Overlay })
 $pillM.Add_Click({ $script:sizeKey = 'medium';  Update-Pills; Update-Preview; Save-Overlay })
@@ -505,7 +663,20 @@ $pillTL.Add_Click({ $script:posKey = 'topleft';     Update-Pills; Update-Preview
 $pillBR.Add_Click({ $script:posKey = 'bottomright'; Update-Pills; Update-Preview; Save-Overlay })
 
 Load-Overlay
-$form.Add_Shown({ Apply-Language; if (-not (Test-Path $script:ovFile)) { Save-Overlay } })
+
+# Live status: without this the "game is running" warning would stay on screen
+# after the user closes the game.
+$script:refreshTimer = New-Object System.Windows.Forms.Timer
+$script:refreshTimer.Interval = 2000
+$script:refreshTimer.Add_Tick({ try { Refresh-Status } catch { } })
+
+$form.Add_Shown({
+    [void](Get-MaxHz)                 # warm the WMI query before the first timer tick
+    Apply-Language
+    if (-not (Test-Path $script:ovFile)) { Save-Overlay }
+    $script:refreshTimer.Start()
+})
+$form.Add_FormClosed({ try { $script:refreshTimer.Stop() } catch { } })
 
 [void]$form.ShowDialog()
 exit 0

@@ -30,12 +30,11 @@ if ($dest -ieq $src) {
     }
     New-Item -ItemType Directory -Path $dest | Out-Null
 
-    $files = @('StarRail-120FPS.bat', 'SET-120FPS.bat', 'RESTORE-60FPS.bat', 'FPS-MONITOR.bat',
-               'CLEANUP-PRESENTMON.bat', 'INSTALL.bat', 'UNINSTALL.bat', 'LICENSE',
-               'README.md', 'README.en.md')
-    foreach ($f in $files) {
-        $p = Join-Path $src $f
-        if (Test-Path $p) { Copy-Item $p $dest -Force }
+    # Copy every file in the repository root (bat / vbs / md / LICENSE ...),
+    # then the script and tool folders. Listing files by hand used to mean a
+    # forgotten file silently broke a feature after an update.
+    Get-ChildItem -Path $src -File | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
     }
     foreach ($d in @('scripts', 'tools')) {
         $p = Join-Path $src $d

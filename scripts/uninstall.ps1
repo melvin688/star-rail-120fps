@@ -23,6 +23,20 @@ foreach ($dir in $places) {
     }
 }
 
+# the "start with the game" watcher: stop it and drop its Startup entry
+$startupLnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\StarRail120FPS-Agent.lnk'
+if (Test-Path $startupLnk) {
+    Remove-Item $startupLnk -Force -ErrorAction SilentlyContinue
+    Write-Host "  removed startup entry: $startupLnk"
+}
+$watcher = Join-Path $dest 'scripts\game-watch.ps1'
+if (Test-Path $watcher) {
+    Start-Process -FilePath 'powershell.exe' `
+        -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $watcher + '" -Stop') `
+        -WindowStyle Hidden -Wait
+    Write-Host '  stopped the game watcher (if it was running)'
+}
+
 if (Test-Path $dest) {
     Write-Host "  removing $dest ..."
     Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
